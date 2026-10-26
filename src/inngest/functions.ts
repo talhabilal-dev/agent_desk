@@ -68,7 +68,9 @@ export const processDocument = inngest.createFunction(
     // OCR is CPU-heavy; keep one large scan from starving everything else.
     concurrency: 2,
     onFailure: async ({ event, error }) => {
-      const documentId = (event as unknown as { data?: DocumentData }).data
+      // Failure events nest the original trigger: event.data.event.data.
+      // (FailureEventPayload.data = { function_id, run_id, error, event }.)
+      const documentId = (event.data.event?.data as DocumentData | undefined)
         ?.documentId;
 
       if (documentId) {
@@ -129,7 +131,9 @@ export const embedDocument = inngest.createFunction(
     retries: 2,
     concurrency: 2,
     onFailure: async ({ event, error }) => {
-      const documentId = (event as unknown as { data?: DocumentData }).data
+      // Failure events nest the original trigger: event.data.event.data.
+      // (FailureEventPayload.data = { function_id, run_id, error, event }.)
+      const documentId = (event.data.event?.data as DocumentData | undefined)
         ?.documentId;
 
       if (documentId) {

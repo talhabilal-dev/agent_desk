@@ -111,6 +111,7 @@ async function DocumentsContent({
                 pageCount: doc.pageCount,
                 errorText: doc.errorText,
                 sizeBytes: doc.sizeBytes,
+                updatedAt: doc.updatedAt,
               }))}
             />
             <Pagination

@@ -1,7 +1,7 @@
 import { extractTextItems, renderPageAsImage } from "unpdf";
 
-/** Non-whitespace characters required before a PDF counts as having a text layer. */
-const MIN_TEXT_CHARS = 40;
+/** Visible characters per page required before a PDF counts as having a text layer. */
+const MIN_CHARS_PER_PAGE = 10;
 /** PDF text items within this many units of Y are treated as the same line. */
 const Y_TOLERANCE = 3;
 
@@ -49,8 +49,15 @@ export function alignTextItems(items: PdfTextItem[]) {
     .join("\n");
 }
 
-export function hasTextLayer(text: string) {
-  return text.replace(/\s/g, "").length >= MIN_TEXT_CHARS;
+/**
+ * A real text layer yields visible characters on every page; a scanned PDF
+ * yields almost none. The threshold is per page so short documents (a memo, a
+ * title page) aren't misrouted to OCR.
+ */
+export function hasTextLayer(text: string, pageCount: number) {
+  const chars = text.replace(/\s/g, "").length;
+
+  return chars >= Math.max(MIN_CHARS_PER_PAGE, pageCount * MIN_CHARS_PER_PAGE);
 }
 
 export function alignPages(pages: PdfTextItem[][]) {

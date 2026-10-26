@@ -96,16 +96,24 @@ export async function embedExtractedDocument(documentId: string) {
 
     return { documentId: doc.id, chunks: stored.length };
   } catch (error) {
+    const message = error instanceof Error ? error.message : String(error);
+
     if (error instanceof DocumentError && !error.retryable) {
-      await failDocument(doc.id, error.message);
+      await failDocument(doc.id, message);
 
       return {
         documentId: doc.id,
         failed: true,
         code: error.code,
-        message: error.message,
+        message,
       };
     }
+
+    // Transient: surface the message while Inngest retries.
+    await db
+      .update(document)
+      .set({ errorText: message.slice(0, 500) })
+      .where(eq(document.id, doc.id));
 
     throw error;
   }

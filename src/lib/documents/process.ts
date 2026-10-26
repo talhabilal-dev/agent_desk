@@ -82,10 +82,10 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
   const ownerId = await getOwnerId(doc.organizationId);
   const entitlements = await getEntitlements(ownerId);
 
-  let bytes: Buffer;
+  let fileBuffer: Buffer;
 
   try {
-    bytes = await getFile(doc.sourceKey);
+    fileBuffer = await getFile(doc.sourceKey);
   } catch {
     // A raw ENOENT would be treated as transient and retried; the file is
     // genuinely gone (ephemeral storage), so fail fast with a clear message.
@@ -94,6 +94,12 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
       "The uploaded file is no longer available. Upload it again.",
     );
   }
+
+  // pdf.js rejects Node Buffers outright ("Please provide binary data as
+  // `Uint8Array`, rather than `Buffer`"), and a Buffer's ArrayBuffer comes from
+  // a shared pool that pdf.js may transfer. So copy into a plain Uint8Array for
+  // everything routed through unpdf; sharp/tesseract keep the Buffer.
+  const bytes = new Uint8Array(fileBuffer);
 
   function requireOcr() {
     if (!entitlements.ocr) {
@@ -107,7 +113,7 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
   if (doc.mimeType === "application/pdf") {
     const { totalPages, text } = await readPdf(bytes);
 
-    if (hasTextLayer(text)) {
+    if (hasTextLayer(text, totalPages)) {
       return {
         ownerId,
         text,
@@ -126,7 +132,19 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
       );
     }
 
-    const images = await renderPages(bytes, totalPages, MAX_OCR_PAGES);
+    let images: Buffer[];
+
+    try {
+      images = await renderPages(bytes, totalPages, MAX_OCR_PAGES);
+    } catch (error) {
+      // pdf.js renders through a fake worker that transfers buffers, which Node
+      // rejects in some runtimes. Surface it as an actionable message instead of
+      // a bare DataCloneError.
+      throw new DocumentError(
+        "PROCESSING_FAILED",
+        `This PDF has no text layer and its pages could not be rendered for OCR (${(error as Error).message}). Upload the pages as images instead.`,
+      );
+    }
 
     for (const image of images) {
       await validateImage(image);
@@ -144,10 +162,10 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
   }
 
   if (doc.mimeType.startsWith("image/")) {
-    await validateImage(bytes);
+    await validateImage(fileBuffer);
     requireOcr();
 
-    const [text] = await ocrImages([bytes]);
+    const [text] = await ocrImages([fileBuffer]);
 
     return {
       ownerId,
@@ -247,18 +265,26 @@ export async function processClaimedDocument(documentId: string) {
       status: "extracted" as const,
     };
   } catch (error) {
-    // Permanent rejections are recorded once; transient ones bubble up so
-    // Inngest retries and `onFailure` records the final message.
+    const message = error instanceof Error ? error.message : String(error);
+
+    // Permanent rejections are recorded once.
     if (error instanceof DocumentError && !error.retryable) {
-      await failDocument(doc.id, error.message);
+      await failDocument(doc.id, message);
 
       return {
         documentId: doc.id,
         failed: true,
         code: error.code,
-        message: error.message,
+        message,
       };
     }
+
+    // Transient: record the message so the UI can show it while Inngest
+    // retries, then rethrow.
+    await db
+      .update(document)
+      .set({ errorText: message.slice(0, 500) })
+      .where(eq(document.id, doc.id));
 
     throw error;
   }

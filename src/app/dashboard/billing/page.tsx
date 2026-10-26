@@ -17,6 +17,7 @@ import {
   isBillingConfigured,
 } from "@/lib/billing/entitlements";
 import { listPlans } from "@/lib/billing/plans";
+import { getUsedPages } from "@/lib/documents/quota";
 import { listOrganizations } from "@/lib/organizations/service";
 import { getSession } from "@/lib/session";
 
@@ -39,14 +40,21 @@ async function BillingContent() {
     redirect("/sign-in");
   }
 
-  const [plans, current, entitlements, organizations] = await Promise.all([
-    listPlans(),
-    getCurrentSubscription(session.user.id),
-    getEntitlements(session.user.id),
-    listOrganizations(session.user.id),
-  ]);
+  const [plans, current, entitlements, organizations, pagesUsed] =
+    await Promise.all([
+      listPlans(),
+      getCurrentSubscription(session.user.id),
+      getEntitlements(session.user.id),
+      listOrganizations(session.user.id),
+      getUsedPages(session.user.id),
+    ]);
 
   const billingConfigured = isBillingConfigured();
+  const pagesRemaining = Math.max(0, entitlements.pages - pagesUsed);
+  const pagesPercent =
+    entitlements.pages > 0
+      ? Math.min(100, Math.round((pagesUsed / entitlements.pages) * 100))
+      : 0;
   const activePlan = plans.find((plan) => plan.key === entitlements.plan);
   const renewal = current?.periodEnd
     ? current.periodEnd.toLocaleDateString("en-GB", {
@@ -91,8 +99,15 @@ async function BillingContent() {
                 </dd>
               </div>
               <div className="flex flex-col gap-1">
-                <dt className="text-xs text-muted-foreground">Pages / month</dt>
-                <dd className="font-medium">{entitlements.pages}</dd>
+                <dt className="text-xs text-muted-foreground">
+                  Pages remaining
+                </dt>
+                <dd className="font-medium">
+                  {pagesRemaining}
+                  <span className="ml-1 text-xs font-normal text-muted-foreground">
+                    of {entitlements.pages}
+                  </span>
+                </dd>
               </div>
               <div className="flex flex-col gap-1">
                 <dt className="text-xs text-muted-foreground">OCR</dt>
@@ -107,6 +122,22 @@ async function BillingContent() {
                 </dd>
               </div>
             </dl>
+
+            <div className="flex flex-col gap-1.5">
+              <div className="flex flex-wrap items-center justify-between gap-2 text-xs text-muted-foreground">
+                <span>Pages this month</span>
+                <span>
+                  {pagesUsed} of {entitlements.pages} used · {pagesRemaining}{" "}
+                  remaining · resets monthly
+                </span>
+              </div>
+              <div className="h-1.5 w-full overflow-hidden rounded-full bg-white/10">
+                <div
+                  className="h-full rounded-full bg-gradient-to-r from-indigo-500 to-fuchsia-500"
+                  style={{ width: `${pagesPercent}%` }}
+                />
+              </div>
+            </div>
 
             {current ? (
               <SubscriptionActions

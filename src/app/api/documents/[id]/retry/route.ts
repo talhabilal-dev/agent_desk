@@ -4,6 +4,7 @@ import { db, document, organization } from "@/db";
 import { inngest } from "@/inngest/client";
 import { requireApiSession } from "@/lib/organizations/guard";
 import { organizationIdSchema } from "@/lib/validations/organization";
+import { isStalled } from "@/utils/documents";
 
 type RouteContext = { params: Promise<{ id: string }> };
 
@@ -25,6 +26,7 @@ export async function POST(request: Request, context: RouteContext) {
       id: document.id,
       status: document.status,
       content: document.content,
+      updatedAt: document.updatedAt,
     })
     .from(document)
     .innerJoin(organization, eq(document.organizationId, organization.id))
@@ -40,9 +42,16 @@ export async function POST(request: Request, context: RouteContext) {
     return Response.json({ error: "Document not found." }, { status: 404 });
   }
 
-  if (owned.status !== "failed" && owned.status !== "extracted") {
+  // A stalled row (worker died, or a run failed before it was recorded) must be
+  // recoverable too, otherwise it sits on "processing" forever.
+  const retryable =
+    owned.status === "failed" ||
+    owned.status === "extracted" ||
+    isStalled(owned.status, owned.updatedAt);
+
+  if (!retryable) {
     return Response.json(
-      { error: "Only failed or unindexed documents can be retried." },
+      { error: "Only failed, unindexed or stalled documents can be retried." },
       { status: 409 },
     );
   }

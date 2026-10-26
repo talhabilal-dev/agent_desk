@@ -5,8 +5,10 @@ const nextConfig: NextConfig = {
   cacheComponents: true,
   partialPrefetching: true,
   // Native/binary dependencies used by document processing must stay outside
-  // the bundle: @napi-rs/canvas ships a .node addon that ESM chunks can't place.
-  serverExternalPackages: ["@napi-rs/canvas", "sharp", "tesseract.js"],
+  // the bundle: @napi-rs/canvas ships a .node addon that ESM chunks can't place,
+  // and bundling unpdf breaks pdf.js's Node detection so it tries to transfer
+  // data to a worker ("Cannot transfer object of unsupported type").
+  serverExternalPackages: ["@napi-rs/canvas", "sharp", "tesseract.js", "unpdf"],
   turbopack: {
     rules: {
       "*.css": {

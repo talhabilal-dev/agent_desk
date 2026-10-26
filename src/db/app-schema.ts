@@ -1,3 +1,4 @@
+import { sql } from "drizzle-orm";
 import {
   boolean,
   index,
@@ -44,6 +45,54 @@ export const processingTierEnum = pgEnum("processing_tier", [
   "basic",
   "advanced",
 ]);
+
+export const widgetPositionEnum = pgEnum("widget_position", [
+  "bottom-right",
+  "bottom-left",
+]);
+
+/**
+ * An embeddable chat widget. `publicKey` is deliberately publishable — it ships
+ * in the customer's HTML — so it must only ever authorize read-only config and
+ * new chat turns for this one widget, never account actions.
+ */
+export const chatWidget = pgTable(
+  "chat_widget",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    name: text("name").notNull(),
+    publicKey: text("public_key").notNull().unique(),
+    primaryColor: text("primary_color").notNull().default("#4f46e5"),
+    backgroundColor: text("background_color").notNull().default("#0b0b12"),
+    textColor: text("text_color").notNull().default("#f8fafc"),
+    position: widgetPositionEnum("position").notNull().default("bottom-right"),
+    title: text("title").notNull().default("Chat with us"),
+    welcomeMessage: text("welcome_message")
+      .notNull()
+      .default("Hi! How can I help?"),
+    /**
+     * Origins allowed to call the public widget endpoints, e.g.
+     * `https://app.acme.com`. Empty means "any origin": the key is publishable
+     * anyway, so this is browser-side defence in depth, not a security boundary.
+     */
+    allowedOrigins: text("allowed_origins")
+      .array()
+      .notNull()
+      .default(sql`'{}'::text[]`),
+    active: boolean("active").notNull().default(true),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    index("chat_widget_organization_id_idx").on(table.organizationId),
+  ],
+);
 
 /**
  * Subscription plan catalog. Kept in the database so plans and prices are

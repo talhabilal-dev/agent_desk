@@ -1,6 +1,7 @@
 import { and, count, desc, eq } from "drizzle-orm";
 
 import { db, document, embedding, organization } from "@/db";
+import type { DocumentStatus } from "@/utils/documents";
 
 /** Columns safe to expose to the client (never `sourceKey`). */
 export const DOCUMENT_SUMMARY_COLUMNS = {
@@ -14,16 +15,11 @@ export const DOCUMENT_SUMMARY_COLUMNS = {
   mimeType: document.mimeType,
   sizeBytes: document.sizeBytes,
   createdAt: document.createdAt,
+  updatedAt: document.updatedAt,
   processedAt: document.processedAt,
 };
 
-export type DocumentStatus =
-  | "pending"
-  | "processing"
-  | "extracted"
-  | "embedding"
-  | "ready"
-  | "failed";
+export type { DocumentStatus } from "@/utils/documents";
 
 export type DocumentSummary = {
   id: string;
@@ -36,6 +32,7 @@ export type DocumentSummary = {
   mimeType: string | null;
   sizeBytes: number | null;
   createdAt: Date;
+  updatedAt: Date;
   processedAt: Date | null;
 };
 

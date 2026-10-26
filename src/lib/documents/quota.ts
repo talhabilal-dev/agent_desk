@@ -9,6 +9,22 @@ export function currentPeriod(date = new Date()) {
   return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, "0")}`;
 }
 
+/** Pages already reserved in the current period (0 when nothing ran yet). */
+export async function getUsedPages(referenceId: string) {
+  const [row] = await db
+    .select({ pages: usage.pages })
+    .from(usage)
+    .where(
+      and(
+        eq(usage.referenceId, referenceId),
+        eq(usage.period, currentPeriod()),
+      ),
+    )
+    .limit(1);
+
+  return row?.pages ?? 0;
+}
+
 /**
  * Atomically reserves `pages` against the caller's monthly allowance.
  *

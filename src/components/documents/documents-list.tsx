@@ -9,6 +9,7 @@ import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { retryDocument } from "@/lib/documents/client";
 import type { DocumentStatus } from "@/lib/documents/service";
+import { isStalled } from "@/utils/documents";
 import { errorMessage } from "@/utils/error";
 import { formatBytes } from "@/utils/format";
 
@@ -20,6 +21,7 @@ export type DocumentRow = {
   pageCount: number | null;
   errorText: string | null;
   sizeBytes: number | null;
+  updatedAt: Date | string;
 };
 
 const STATUS_STYLES: Record<DocumentStatus, string> = {
@@ -53,8 +55,9 @@ function DocumentItem({ document }: { document: DocumentRow }) {
   const router = useRouter();
   const [isRetrying, startRetry] = useTransition();
 
+  const stalled = isStalled(document.status, document.updatedAt);
   const canRetry =
-    document.status === "failed" || document.status === "extracted";
+    document.status === "failed" || document.status === "extracted" || stalled;
 
   function retry() {
     startRetry(async () => {

@@ -2,7 +2,8 @@
 - Prefers using shadcn/ui components for UI work. Confidence: 0.7
 - Expects UI to be responsive across breakpoints. Confidence: 0.65
 - Likes a dark theme with gradient accents for a polished, "stunning" visual style. Confidence: 0.65
-- Expects every page/state — including the 404 / not-found page — to match the app's theme so the visual design stays consistent. Confidence: 0.6
+- Wants visual consistency across the whole app — every page/state (including the 404 / not-found page) should match the app's theme, and new feature UIs should reuse the existing components/layout patterns ("make the ui consistent"). Confidence: 0.65
+- Wants users to be able to customize the look/theme of user-facing surfaces (e.g. choose custom colors, position, copy) rather than a fixed hardcoded appearance. Confidence: 0.55
 - Prefers showing errors to users via toasts rather than inline error messages/alert paragraphs. Confidence: 0.75
 - Wants changes verified with lint + build only (biome + tsc + build); does NOT want automated browser/agent-browser testing — prefers to test the running app themselves. Confidence: 0.85
 - Prefers API/action calls centralized in a single dedicated folder (e.g. `src/actions`) so components stay minimal and contain no API logic. Confidence: 0.85
@@ -23,6 +24,8 @@
 - Prefers moving verification/side effects off the request path into a background job queue (Inngest), verifying against the authoritative source (e.g. re-reading the transaction from Stripe) rather than trusting the client redirect or an inline call. Confidence: 0.6
 - Prefers integrating AI/LLM capabilities through LangChain rather than calling provider SDKs directly — explicitly asks for OpenAI embeddings implemented "using openai and langchain" (i.e. `@langchain/openai` wrappers). Confidence: 0.6
 - Wants to understand how the stack works "behind the scenes" — asks for mechanical, end-to-end explanations of the full workflow and how libraries/plugins actually handle it internally, not just a high-level usage summary. Confidence: 0.5
-- Wants long-running/background jobs to surface their status and error messages in the UI (e.g. document rows showing status + the failure reason) rather than failing silently. Confidence: 0.6
+- Wants long-running/background jobs to surface their true status and error messages in the UI (e.g. document rows showing status + the failure reason) rather than failing silently, and expects the UI to stop showing a loading/processing state once the job has errored (reported that Inngest "completed with error" while the page still said "processing ... Waiting for extraction"). Confidence: 0.65
 - Expects premium capabilities to be gated by plan entitlements (e.g. OCR only available on higher-tier plans), consistent with keeping plan/feature limits in the database. Confidence: 0.55
 - Prefers validating inputs and preconditions before running expensive work (check a file is valid/extractable, reject a blurry image up front) instead of failing partway through processing. Confidence: 0.55
+- Prefers cross-cutting concerns extracted into one shared utility rather than repeated per call site — e.g. "use a session utility to check session" so proxy, pages and actions resolve the session the same way. Confidence: 0.55
+- Expects the database to be left clean alongside code changes — when a feature/route is removed asks to also wipe the related rows ("and also clean db"), and expects the agent's own test rows to be deleted afterwards. Confidence: 0.5
