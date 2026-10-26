@@ -1,6 +1,7 @@
 import { redirect } from "next/navigation";
 import { Suspense } from "react";
 
+import { PasswordForm } from "@/components/settings/password-form";
 import { ProfileForm } from "@/components/settings/profile-form";
 import {
   Card,
@@ -41,21 +42,34 @@ async function SettingsContent() {
       </div>
 
       <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border border-white/5 bg-white/[0.02] ring-0 lg:col-span-2">
-          <CardHeader>
-            <CardTitle>Profile</CardTitle>
-            <CardDescription>
-              This is how you appear across AgentDesk.
-            </CardDescription>
-          </CardHeader>
-          <CardContent>
-            <ProfileForm
-              defaultName={session.user.name}
-              defaultImage={session.user.image ?? ""}
-              email={session.user.email}
-            />
-          </CardContent>
-        </Card>
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          <Card className="border border-white/5 bg-white/[0.02] ring-0">
+            <CardHeader>
+              <CardTitle>Profile</CardTitle>
+              <CardDescription>
+                This is how you appear across AgentDesk.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <ProfileForm
+                defaultName={session.user.name}
+                defaultImage={session.user.image ?? ""}
+              />
+            </CardContent>
+          </Card>
+
+          <Card className="border border-white/5 bg-white/[0.02] ring-0">
+            <CardHeader>
+              <CardTitle>Password</CardTitle>
+              <CardDescription>
+                Update the password used to sign in.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <PasswordForm />
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </>
   );
@@ -69,7 +83,10 @@ function SettingsSkeleton() {
         <Skeleton className="h-4 w-64" />
       </div>
       <div className="grid gap-4 lg:grid-cols-3">
-        <Skeleton className="h-96 w-full lg:col-span-2" />
+        <div className="flex flex-col gap-4 lg:col-span-2">
+          <Skeleton className="h-80 w-full" />
+          <Skeleton className="h-80 w-full" />
+        </div>
       </div>
     </>
   );

@@ -6,6 +6,7 @@ import {
   pgTable,
   text,
   timestamp,
+  uniqueIndex,
   uuid,
   vector,
 } from "drizzle-orm/pg-core";
@@ -33,6 +34,8 @@ export const documentActionEnum = pgEnum("document_action", [
 export const documentStatusEnum = pgEnum("document_status", [
   "pending",
   "processing",
+  "extracted",
+  "embedding",
   "ready",
   "failed",
 ]);
@@ -116,6 +119,17 @@ export const document = pgTable(
     type: documentTypeEnum("type").notNull(),
     action: documentActionEnum("action").notNull(),
     status: documentStatusEnum("status").default("pending").notNull(),
+    /** Temp upload path; nulled once the source file has been deleted. */
+    sourceKey: text("source_key"),
+    fileName: text("file_name"),
+    mimeType: text("mime_type"),
+    sizeBytes: integer("size_bytes"),
+    /** sha-256 of the uploaded bytes; used to dedupe re-uploads. */
+    contentHash: text("content_hash"),
+    pageCount: integer("page_count"),
+    /** Failure reason shown in the UI. */
+    errorText: text("error_text"),
+    processedAt: timestamp("processed_at"),
     createdAt: timestamp("created_at").defaultNow().notNull(),
     updatedAt: timestamp("updated_at")
       .defaultNow()
@@ -125,6 +139,39 @@ export const document = pgTable(
   (table) => [
     index("document_organization_id_idx").on(table.organizationId),
     index("document_status_idx").on(table.status),
+    // Idempotency layer 1: identical bytes in the same org reuse one row.
+    // Postgres treats NULLs as distinct, so legacy rows without a hash are fine.
+    uniqueIndex("document_org_hash_idx").on(
+      table.organizationId,
+      table.contentHash,
+    ),
+  ],
+);
+
+/**
+ * Monthly page usage, keyed by the subscription reference (the organization
+ * owner). The allowance resets when the calendar month rolls over because the
+ * period forms part of the key.
+ */
+export const usage = pgTable(
+  "usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    referenceId: text("reference_id").notNull(),
+    /** `YYYY-MM` in UTC. */
+    period: text("period").notNull(),
+    pages: integer("pages").notNull().default(0),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+    updatedAt: timestamp("updated_at")
+      .defaultNow()
+      .$onUpdate(() => new Date())
+      .notNull(),
+  },
+  (table) => [
+    uniqueIndex("usage_reference_period_idx").on(
+      table.referenceId,
+      table.period,
+    ),
   ],
 );
 

@@ -14,11 +14,9 @@ import { errorMessage } from "@/utils/error";
 export function ProfileForm({
   defaultName,
   defaultImage,
-  email,
 }: {
   defaultName: string;
   defaultImage: string;
-  email: string;
 }) {
   const router = useRouter();
   const [name, setName] = useState(defaultName);
@@ -53,18 +51,13 @@ export function ProfileForm({
     >
       <div className="flex items-center gap-4">
         <UserAvatar
-          name={name || email}
+          name={name || "You"}
           image={image || null}
           className="size-14 text-base"
         />
-        <div className="flex min-w-0 flex-col gap-1">
-          <span className="truncate text-sm font-medium">
-            {name || "Your name"}
-          </span>
-          <span className="truncate text-xs text-muted-foreground">
-            {email}
-          </span>
-        </div>
+        <span className="truncate text-sm font-medium">
+          {name || "Your name"}
+        </span>
       </div>
 
       <div className="flex flex-col gap-2">
@@ -94,22 +87,6 @@ export function ProfileForm({
         />
         <p className="text-xs text-muted-foreground">
           Leave empty to fall back to your initials.
-        </p>
-      </div>
-
-      <div className="flex flex-col gap-2">
-        <label htmlFor="profile-email" className="text-sm font-medium">
-          Email
-        </label>
-        <Input
-          id="profile-email"
-          value={email}
-          readOnly
-          className="text-muted-foreground"
-        />
-        <p className="text-xs text-muted-foreground">
-          Changing your email requires verification and isn&apos;t available
-          here yet.
         </p>
       </div>
 

@@ -5,6 +5,7 @@ import {
   BotMessageSquare,
   Building2,
   CreditCard,
+  FileText,
   FolderKanban,
   LayoutDashboard,
   Settings,
@@ -30,6 +31,7 @@ import {
 
 const navItems = [
   { title: "Dashboard", href: "/dashboard", icon: LayoutDashboard },
+  { title: "Documents", href: "/dashboard/documents", icon: FileText },
   { title: "Organization", href: "/dashboard/organization", icon: Building2 },
   { title: "Projects", href: "/dashboard/projects", icon: FolderKanban },
   { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },

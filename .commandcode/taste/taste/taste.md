@@ -9,6 +9,8 @@
 - Prefers domain/feature folders at the `src/` root (e.g. `src/db`, `src/utils`, `src/actions`) rather than nested under `src/lib`. Confidence: 0.7
 - Prefers using zod for input/form validation. Confidence: 0.8
 - Favors small, single-responsibility modules — e.g. asks for Drizzle relations to live in their own file (`src/db/relation.ts`) instead of being inlined in `db/index.ts`, keeping `index.ts` to just client setup and re-exports. Confidence: 0.6
+- Prefers splitting a long/expensive processing pipeline into separate staged functions with their own lifecycles rather than one monolith — e.g. "divide it into two functions, one will process the document and the other will do embeddings by fetching from the db" — so each stage can be retried/re-run independently and reads its inputs from the database. Confidence: 0.55
+- Wants list-heavy UIs to be paginated and each item to have its own detail page showing the step-by-step workflow/status (e.g. a per-document page with extraction/embedding stages). Confidence: 0.5
 - Prefers staying on the latest (including RC) versions of libraries and adopting their new idioms/APIs. Confidence: 0.7
 - Avoids deprecated React patterns/APIs — e.g. replaces `FormEvent` with form `action` + `useActionState`. Confidence: 0.8
 - Favors a minimal surface area — explicitly asks for only the features named ("nothing else... role, invitation or anything") and wants unused functionality, actions, schemas, dependencies and route/UI files removed rather than left in place; this extends to the server/API surface too (asks to "remove apis" so leftover/unused endpoints are removed or gated, not just UI). Confidence: 0.7
@@ -19,4 +21,8 @@
 - Prefers business/config data (e.g. subscription plans and pricing) stored in the database so it stays dynamic and editable without a code change, rather than hardcoded in the app. Confidence: 0.7
 - Expects idempotency to be handled explicitly so operations can't run twice (e.g. "handle idempotency to avoid double payments") — wants duplicate/replayed requests or events to be safely deduped rather than risking double side effects. Confidence: 0.75
 - Prefers moving verification/side effects off the request path into a background job queue (Inngest), verifying against the authoritative source (e.g. re-reading the transaction from Stripe) rather than trusting the client redirect or an inline call. Confidence: 0.6
+- Prefers integrating AI/LLM capabilities through LangChain rather than calling provider SDKs directly — explicitly asks for OpenAI embeddings implemented "using openai and langchain" (i.e. `@langchain/openai` wrappers). Confidence: 0.6
 - Wants to understand how the stack works "behind the scenes" — asks for mechanical, end-to-end explanations of the full workflow and how libraries/plugins actually handle it internally, not just a high-level usage summary. Confidence: 0.5
+- Wants long-running/background jobs to surface their status and error messages in the UI (e.g. document rows showing status + the failure reason) rather than failing silently. Confidence: 0.6
+- Expects premium capabilities to be gated by plan entitlements (e.g. OCR only available on higher-tier plans), consistent with keeping plan/feature limits in the database. Confidence: 0.55
+- Prefers validating inputs and preconditions before running expensive work (check a file is valid/extractable, reject a blurry image up front) instead of failing partway through processing. Confidence: 0.55

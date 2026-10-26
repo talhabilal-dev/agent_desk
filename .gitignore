@@ -39,3 +39,9 @@ yarn-error.log*
 # typescript
 *.tsbuildinfo
 next-env.d.ts
+
+# ephemeral document uploads (deleted after processing)
+/.uploads/
+
+# tesseract.js language models, downloaded on first OCR run
+*.traineddata

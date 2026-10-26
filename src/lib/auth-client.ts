@@ -7,4 +7,5 @@ const authClient = createAuthClient({
   plugins: [stripeClient({ subscription: true })],
 });
 
-export const { subscription, updateUser, useSession } = authClient;
+export const { changePassword, subscription, updateUser, useSession } =
+  authClient;

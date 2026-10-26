@@ -1,7 +1,15 @@
 "use client";
 
-import { updateUser } from "@/lib/auth-client";
-import { type ProfileInput, profileSchema } from "@/lib/validations/profile";
+import {
+  changePassword as changePasswordRequest,
+  updateUser,
+} from "@/lib/auth-client";
+import {
+  type PasswordChangeInput,
+  type ProfileInput,
+  passwordChangeSchema,
+  profileSchema,
+} from "@/lib/validations/profile";
 
 /**
  * Updates the signed-in user's profile.
@@ -27,5 +35,28 @@ export async function updateProfile(input: ProfileInput) {
 
   if (error) {
     throw new Error(error.message ?? "Could not update your profile.");
+  }
+}
+
+/**
+ * Changes the password. `confirmPassword` is a form-only field and never leaves
+ * the client; other sessions are revoked so a stolen session can't outlive a
+ * password change.
+ */
+export async function changePassword(input: PasswordChangeInput) {
+  const parsed = passwordChangeSchema.safeParse(input);
+
+  if (!parsed.success) {
+    throw new Error(parsed.error.issues[0]?.message ?? "Invalid input.");
+  }
+
+  const { error } = await changePasswordRequest({
+    currentPassword: parsed.data.currentPassword,
+    newPassword: parsed.data.newPassword,
+    revokeOtherSessions: true,
+  });
+
+  if (error) {
+    throw new Error(error.message ?? "Could not change your password.");
   }
 }

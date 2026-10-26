@@ -4,7 +4,7 @@ import { type NextRequest, NextResponse } from "next/server";
 import { getSession } from "@/lib/session";
 
 const AUTH_ROUTES = ["/sign-in", "/sign-up"];
-const API_ROUTE_PREFIXES = ["/api/organizations"];
+const API_ROUTE_PREFIXES = ["/api/organizations", "/api/documents"];
 
 /**
  * Two-tier guard.
@@ -51,5 +51,6 @@ export const config = {
     "/sign-in",
     "/sign-up",
     "/api/organizations/:path*",
+    "/api/documents/:path*",
   ],
 };

@@ -1,9 +1,13 @@
 import { serve } from "inngest/next";
 
 import { inngest } from "../../../inngest/client";
-import { verifyStripeCheckout } from "../../../inngest/functions";
+import {
+  embedDocument,
+  processDocument,
+  verifyStripeCheckout,
+} from "../../../inngest/functions";
 
 export const { GET, POST, PUT } = serve({
   client: inngest,
-  functions: [verifyStripeCheckout],
+  functions: [verifyStripeCheckout, processDocument, embedDocument],
 });
