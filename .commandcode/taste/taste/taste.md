@@ -1,0 +1,22 @@
+# Taste
+- Prefers using shadcn/ui components for UI work. Confidence: 0.7
+- Expects UI to be responsive across breakpoints. Confidence: 0.65
+- Likes a dark theme with gradient accents for a polished, "stunning" visual style. Confidence: 0.65
+- Expects every page/state — including the 404 / not-found page — to match the app's theme so the visual design stays consistent. Confidence: 0.6
+- Prefers showing errors to users via toasts rather than inline error messages/alert paragraphs. Confidence: 0.75
+- Wants changes verified with lint + build only (biome + tsc + build); does NOT want automated browser/agent-browser testing — prefers to test the running app themselves. Confidence: 0.85
+- Prefers API/action calls centralized in a single dedicated folder (e.g. `src/actions`) so components stay minimal and contain no API logic. Confidence: 0.85
+- Prefers domain/feature folders at the `src/` root (e.g. `src/db`, `src/utils`, `src/actions`) rather than nested under `src/lib`. Confidence: 0.7
+- Prefers using zod for input/form validation. Confidence: 0.8
+- Favors small, single-responsibility modules — e.g. asks for Drizzle relations to live in their own file (`src/db/relation.ts`) instead of being inlined in `db/index.ts`, keeping `index.ts` to just client setup and re-exports. Confidence: 0.6
+- Prefers staying on the latest (including RC) versions of libraries and adopting their new idioms/APIs. Confidence: 0.7
+- Avoids deprecated React patterns/APIs — e.g. replaces `FormEvent` with form `action` + `useActionState`. Confidence: 0.8
+- Favors a minimal surface area — explicitly asks for only the features named ("nothing else... role, invitation or anything") and wants unused functionality, actions, schemas, dependencies and route/UI files removed rather than left in place; this extends to the server/API surface too (asks to "remove apis" so leftover/unused endpoints are removed or gated, not just UI). Confidence: 0.7
+- Expects new features implemented end-to-end — wiring up both the server/backend layer and the corresponding UI, not just one side. Confidence: 0.6
+- Prefers owning the API directly over depending on a library/plugin whose surface can't be cleanly turned off — when a plugin feature can't be disabled, prefers removing the plugin and writing a custom API instead of leaving unused endpoints reachable. Confidence: 0.7
+- Wants auth enforced at every layer (defense in depth): a server-side auth guard in the route handlers *and* a guard in the proxy/middleware, not relying on just one gate. Confidence: 0.7
+- Favors performance/efficiency optimizations when offered — e.g. accepted removing the redundant second DB session read per API call and adding an HNSW vector index so similarity search avoids a seq-scan. Confidence: 0.55
+- Prefers business/config data (e.g. subscription plans and pricing) stored in the database so it stays dynamic and editable without a code change, rather than hardcoded in the app. Confidence: 0.7
+- Expects idempotency to be handled explicitly so operations can't run twice (e.g. "handle idempotency to avoid double payments") — wants duplicate/replayed requests or events to be safely deduped rather than risking double side effects. Confidence: 0.75
+- Prefers moving verification/side effects off the request path into a background job queue (Inngest), verifying against the authoritative source (e.g. re-reading the transaction from Stripe) rather than trusting the client redirect or an inline call. Confidence: 0.6
+- Wants to understand how the stack works "behind the scenes" — asks for mechanical, end-to-end explanations of the full workflow and how libraries/plugins actually handle it internally, not just a high-level usage summary. Confidence: 0.5
