@@ -1,6 +1,7 @@
-import { and, asc, eq } from "drizzle-orm";
+import { and, asc, count, eq, sql } from "drizzle-orm";
 
 import { db, organization } from "@/db";
+import { postgresErrorCode } from "@/utils/error";
 
 export type Organization = typeof organization.$inferSelect;
 
@@ -11,27 +12,20 @@ export class OrganizationSlugTakenError extends Error {
   }
 }
 
-/** Postgres error code, walking drizzle's error `cause` chain. */
-function postgresErrorCode(error: unknown): string | undefined {
-  let current: unknown = error;
-
-  for (let depth = 0; current && depth < 5; depth += 1) {
-    if (typeof current === "object" && "code" in current) {
-      const { code } = current as { code?: unknown };
-      if (typeof code === "string") {
-        return code;
-      }
-    }
-
-    current =
-      typeof current === "object" && current !== null
-        ? (current as { cause?: unknown }).cause
-        : undefined;
+export class OrganizationLimitReachedError extends Error {
+  constructor(readonly limit: number) {
+    super(
+      limit === 0
+        ? "Subscribe to a plan to create organizations."
+        : `Your plan is limited to ${limit} organization${
+            limit === 1 ? "" : "s"
+          }. Upgrade to add more.`,
+    );
+    this.name = "OrganizationLimitReachedError";
   }
-
-  return undefined;
 }
 
+/** Postgres error code, walking drizzle's error `cause` chain. */
 function rethrowSlugConflict(error: unknown): never {
   if (postgresErrorCode(error) === "23505") {
     throw new OrganizationSlugTakenError();
@@ -48,17 +42,40 @@ export async function listOrganizations(ownerId: string) {
     .orderBy(asc(organization.createdAt));
 }
 
+/**
+ * Creates an organization, enforcing the plan allowance *inside* the
+ * transaction. The count used to happen in a separate request-scoped query, so
+ * two simultaneous creates could both pass the check and exceed the plan.
+ */
 export async function createOrganization(
   ownerId: string,
   input: { name: string; slug: string },
+  /** null = no cap (billing unconfigured, or an unlimited plan). */
+  limit: number | null,
 ) {
   try {
-    const [created] = await db
-      .insert(organization)
-      .values({ ...input, ownerId })
-      .returning();
+    return await db.transaction(async (tx) => {
+      // Serializes concurrent creates for this owner; released at commit.
+      await tx.execute(sql`select pg_advisory_xact_lock(hashtext(${ownerId}))`);
 
-    return created;
+      if (limit !== null) {
+        const [owned] = await tx
+          .select({ value: count() })
+          .from(organization)
+          .where(eq(organization.ownerId, ownerId));
+
+        if ((owned?.value ?? 0) >= limit) {
+          throw new OrganizationLimitReachedError(limit);
+        }
+      }
+
+      const [created] = await tx
+        .insert(organization)
+        .values({ ...input, ownerId })
+        .returning();
+
+      return created;
+    });
   } catch (error) {
     rethrowSlugConflict(error);
   }

@@ -30,6 +30,8 @@ export async function listWidgets(ownerId: string) {
       position: chatWidget.position,
       title: chatWidget.title,
       welcomeMessage: chatWidget.welcomeMessage,
+      panelWidth: chatWidget.panelWidth,
+      panelHeight: chatWidget.panelHeight,
       allowedOrigins: chatWidget.allowedOrigins,
       active: chatWidget.active,
       createdAt: chatWidget.createdAt,
@@ -75,6 +77,8 @@ export async function createWidget(ownerId: string, input: CreateWidgetInput) {
       position: input.position,
       title: input.title,
       welcomeMessage: input.welcomeMessage,
+      panelWidth: input.panelWidth,
+      panelHeight: input.panelHeight,
       allowedOrigins: normalizeOrigins(input.allowedOrigins),
     })
     .returning();
@@ -162,6 +166,9 @@ export async function getWidgetByPublicKey(publicKey: string) {
   const [row] = await db
     .select({
       id: chatWidget.id,
+      // Needed server-side to scope retrieval to this widget's workspace.
+      // Never included in the public config payload.
+      organizationId: chatWidget.organizationId,
       name: chatWidget.name,
       primaryColor: chatWidget.primaryColor,
       backgroundColor: chatWidget.backgroundColor,
@@ -169,6 +176,8 @@ export async function getWidgetByPublicKey(publicKey: string) {
       position: chatWidget.position,
       title: chatWidget.title,
       welcomeMessage: chatWidget.welcomeMessage,
+      panelWidth: chatWidget.panelWidth,
+      panelHeight: chatWidget.panelHeight,
       allowedOrigins: chatWidget.allowedOrigins,
       active: chatWidget.active,
     })

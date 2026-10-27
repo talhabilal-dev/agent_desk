@@ -126,5 +126,22 @@
   }
   html {
     @apply font-sans;
+    /* The page still scrolls; only the viewport scrollbar is hidden. On the dark
+       gradients the default track reads as a hard grey stripe. Wheel, touch,
+       keyboard and find-in-page are unaffected, and inner scroll areas (sidebar,
+       transcript) keep their own scrollbars. */
+    scrollbar-width: none;
+    -ms-overflow-style: none;
+  }
+
+  html::-webkit-scrollbar,
+  body::-webkit-scrollbar {
+    display: none;
+  }
+
+  @media (prefers-reduced-motion: no-preference) {
+    html {
+      scroll-behavior: smooth;
+    }
   }
 }

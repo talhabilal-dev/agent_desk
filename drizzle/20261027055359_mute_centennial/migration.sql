@@ -1,0 +1,1 @@
+ALTER TABLE "plan" ADD COLUMN "monthly_cost_ceiling_usd" numeric(10,2) DEFAULT '5' NOT NULL;

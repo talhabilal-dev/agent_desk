@@ -48,18 +48,32 @@ async function ensureProduct(plan) {
   }
 }
 
-async function ensurePrice(productId, lookupKey, unitAmount, interval, planKey) {
-  const existing = await stripe.prices.list({ lookup_keys: [lookupKey], limit: 1 });
+async function ensurePrice(
+  productId,
+  lookupKey,
+  unitAmount,
+  interval,
+  planKey,
+) {
+  const existing = await stripe.prices.list({
+    lookup_keys: [lookupKey],
+    limit: 1,
+  });
   const price = existing.data[0];
 
   if (price) {
-    if (price.unit_amount === unitAmount && price.recurring?.interval === interval) {
+    if (
+      price.unit_amount === unitAmount &&
+      price.recurring?.interval === interval
+    ) {
       return price;
     }
 
     // Stripe prices are immutable: free the lookup key, then create a new one.
     await stripe.prices.update(price.id, { lookup_key: "" });
-    console.log(`  archived ${lookupKey} (${price.unit_amount} -> ${unitAmount})`);
+    console.log(
+      `  archived ${lookupKey} (${price.unit_amount} -> ${unitAmount})`,
+    );
   }
 
   return stripe.prices.create({

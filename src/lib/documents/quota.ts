@@ -1,6 +1,6 @@
 import { and, eq, sql } from "drizzle-orm";
 
-import { db, usage } from "@/db";
+import { type DbClient, db, usage } from "@/db";
 
 import { DocumentError } from "./errors";
 
@@ -30,8 +30,13 @@ export async function getUsedPages(referenceId: string) {
  *
  * The increment happens first and is rolled back when it overflows, so two
  * documents processing concurrently can never both slip under the cap.
+ *
+ * Takes a client so the caller can run this inside the same transaction as the
+ * document update: if the update fails, the reservation rolls back with it and
+ * a retry cannot charge the same pages twice.
  */
 export async function reservePages(
+  client: DbClient,
   referenceId: string,
   pages: number,
   limit: number,
@@ -42,7 +47,7 @@ export async function reservePages(
 
   const period = currentPeriod();
 
-  const [row] = await db
+  const [row] = await client
     .insert(usage)
     .values({ referenceId, period, pages })
     .onConflictDoUpdate({
@@ -54,7 +59,7 @@ export async function reservePages(
   const total = row?.pages ?? pages;
 
   if (total > limit) {
-    await db
+    await client
       .update(usage)
       .set({
         pages: sql`greatest(${usage.pages} - ${pages}, 0)`,

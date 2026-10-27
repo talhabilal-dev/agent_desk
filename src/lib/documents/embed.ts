@@ -3,8 +3,9 @@ import { and, eq } from "drizzle-orm";
 
 import { db, document, embedding } from "@/db";
 import {
-  embedDocumentChunks,
+  embedTexts,
   isEmbeddingsConfigured,
+  storeDocumentChunks,
 } from "@/lib/ai/embeddings";
 
 import { DocumentError } from "./errors";
@@ -80,19 +81,37 @@ export async function embedExtractedDocument(documentId: string) {
       (chunk) => chunk.trim().length > 0,
     );
 
-    // Re-running must never duplicate vectors.
-    await db.delete(embedding).where(eq(embedding.documentId, doc.id));
+    const vectors = await embedTexts(chunks);
 
-    const stored = await embedDocumentChunks({
-      organizationId: doc.organizationId,
-      documentId: doc.id,
-      chunks,
+    if (vectors.length !== chunks.length) {
+      throw new Error(
+        `Expected ${chunks.length} vectors but got ${vectors.length}.`,
+      );
+    }
+
+    // Delete, re-insert and the status change commit together. Previously a
+    // failure between the delete and the insert left the document with no
+    // vectors at all while claiming to be fine.
+    const stored = await db.transaction(async (tx) => {
+      await tx.delete(embedding).where(eq(embedding.documentId, doc.id));
+
+      const rows = await storeDocumentChunks(
+        {
+          organizationId: doc.organizationId,
+          documentId: doc.id,
+          chunks,
+          vectors,
+        },
+        tx,
+      );
+
+      await tx
+        .update(document)
+        .set({ status: "ready", errorText: null, processedAt: new Date() })
+        .where(eq(document.id, doc.id));
+
+      return rows;
     });
-
-    await db
-      .update(document)
-      .set({ status: "ready", errorText: null, processedAt: new Date() })
-      .where(eq(document.id, doc.id));
 
     return { documentId: doc.id, chunks: stored.length };
   } catch (error) {

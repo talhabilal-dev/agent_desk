@@ -102,7 +102,13 @@ async function DetailContent({ params }: { params: Promise<{ id: string }> }) {
       label: "Text extracted",
       state: extractionState,
       detail: hasText
-        ? `${doc.pageCount ?? 0} page${doc.pageCount === 1 ? "" : "s"} · ${doc.content.length.toLocaleString()} characters`
+        ? `${doc.pageCount ?? 0} page${doc.pageCount === 1 ? "" : "s"}${
+            doc.totalPageCount &&
+            doc.pageCount &&
+            doc.totalPageCount > doc.pageCount
+              ? ` of ${doc.totalPageCount} (10-page limit per document)`
+              : ""
+          } · ${doc.content.length.toLocaleString()} characters`
         : "Waiting for extraction",
     },
     {
@@ -181,7 +187,18 @@ async function DetailContent({ params }: { params: Promise<{ id: string }> }) {
           </CardHeader>
           <CardContent className="flex flex-col gap-4">
             <dl className="grid grid-cols-2 gap-4 text-sm sm:grid-cols-3">
-              <Meta label="Pages" value={doc.pageCount ?? "—"} />
+              <Meta
+                label="Pages"
+                value={
+                  doc.pageCount === null
+                    ? "—"
+                    : doc.totalPageCount &&
+                        doc.pageCount &&
+                        doc.totalPageCount > doc.pageCount
+                      ? `${doc.pageCount} of ${doc.totalPageCount}`
+                      : doc.pageCount
+                }
+              />
               <Meta
                 label="Size"
                 value={doc.sizeBytes ? formatBytes(doc.sizeBytes) : "—"}

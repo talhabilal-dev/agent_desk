@@ -24,7 +24,7 @@ export const passwordChangeSchema = z
     currentPassword: z.string().min(1, "Enter your current password."),
     newPassword: z
       .string()
-      .min(8, "Password must be at least 8 characters.")
+      .min(12, "Password must be at least 12 characters.")
       .max(128, "Password must be 128 characters or fewer."),
     confirmPassword: z.string().min(1, "Confirm your new password."),
   })

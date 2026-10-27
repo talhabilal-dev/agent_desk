@@ -11,6 +11,7 @@ export const DOCUMENT_SUMMARY_COLUMNS = {
   status: document.status,
   type: document.type,
   pageCount: document.pageCount,
+  totalPageCount: document.totalPageCount,
   errorText: document.errorText,
   mimeType: document.mimeType,
   sizeBytes: document.sizeBytes,
@@ -28,6 +29,7 @@ export type DocumentSummary = {
   status: DocumentStatus;
   type: "raw_text" | "structured_text";
   pageCount: number | null;
+  totalPageCount: number | null;
   errorText: string | null;
   mimeType: string | null;
   sizeBytes: number | null;
@@ -53,6 +55,7 @@ export async function listDocumentsForOwner(
     .offset(options.offset ?? 0);
 }
 
+/** Total documents across every organization `ownerId` owns. */
 export async function countDocumentsForOwner(ownerId: string) {
   const [row] = await db
     .select({ value: count() })

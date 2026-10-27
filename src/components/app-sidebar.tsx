@@ -1,16 +1,13 @@
 "use client";
 
 import {
-  BarChart3,
   BotMessageSquare,
   Building2,
   CreditCard,
   FileText,
-  FolderKanban,
   LayoutDashboard,
   MessagesSquare,
   Settings,
-  Sparkles,
 } from "lucide-react";
 import Link from "next/link";
 import { usePathname } from "next/navigation";
@@ -35,8 +32,6 @@ const navItems = [
   { title: "Documents", href: "/dashboard/documents", icon: FileText },
   { title: "Widgets", href: "/dashboard/widgets", icon: MessagesSquare },
   { title: "Organization", href: "/dashboard/organization", icon: Building2 },
-  { title: "Projects", href: "/dashboard/projects", icon: FolderKanban },
-  { title: "Analytics", href: "/dashboard/analytics", icon: BarChart3 },
   { title: "Billing", href: "/dashboard/billing", icon: CreditCard },
   { title: "Settings", href: "/dashboard/settings", icon: Settings },
 ];
@@ -91,15 +86,6 @@ export function AppSidebar(props: React.ComponentProps<typeof Sidebar>) {
       </SidebarContent>
 
       <SidebarFooter>
-        <div className="mx-2 rounded-lg border border-sidebar-border bg-gradient-to-br from-indigo-500/10 to-fuchsia-500/10 p-3 group-data-[collapsible=icon]:hidden">
-          <div className="flex items-center gap-2 text-sm font-medium">
-            <Sparkles className="size-4 text-indigo-400" />
-            Upgrade to Scale
-          </div>
-          <p className="mt-1 text-xs text-muted-foreground">
-            Unlock unlimited agent runs and team seats.
-          </p>
-        </div>
         <NavUser />
       </SidebarFooter>
 

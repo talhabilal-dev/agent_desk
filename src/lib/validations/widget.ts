@@ -7,12 +7,40 @@ const hexColor = z
 
 export const widgetPositions = ["bottom-right", "bottom-left"] as const;
 
+/** Panel size, in px. The loader clamps both to the viewport. */
+export const PANEL_SIZE = {
+  width: { min: 280, max: 560, default: 340 },
+  height: { min: 320, max: 720, default: 460 },
+} as const;
+
 /** Theme fields shared by create and update. */
 export const widgetThemeSchema = z.object({
   primaryColor: hexColor,
   backgroundColor: hexColor,
   textColor: hexColor,
   position: z.enum(widgetPositions),
+  panelWidth: z
+    .number()
+    .int()
+    .min(
+      PANEL_SIZE.width.min,
+      `Width must be at least ${PANEL_SIZE.width.min}px.`,
+    )
+    .max(
+      PANEL_SIZE.width.max,
+      `Width must be ${PANEL_SIZE.width.max}px or less.`,
+    ),
+  panelHeight: z
+    .number()
+    .int()
+    .min(
+      PANEL_SIZE.height.min,
+      `Height must be at least ${PANEL_SIZE.height.min}px.`,
+    )
+    .max(
+      PANEL_SIZE.height.max,
+      `Height must be ${PANEL_SIZE.height.max}px or less.`,
+    ),
   title: z
     .string()
     .trim()

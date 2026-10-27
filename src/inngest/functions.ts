@@ -35,19 +35,40 @@ export const verifyStripeCheckout = inngest.createFunction(
     triggers: [{ event: "stripe/checkout.completed" }],
     idempotency: "event.data.eventId",
     retries: 3,
+    onFailure: async ({ event, error }) => {
+      // Nothing to persist: the claim is only written on success (see below), so
+      // a failed run leaves the event re-deliverable. Log loudly so an
+      // unreconciled subscription is visible.
+      const data =
+        (event.data.event?.data as CheckoutCompletedData | undefined) ??
+        undefined;
+
+      console.error(
+        "[billing] checkout verification failed permanently; the subscription may be unreconciled",
+        {
+          eventId: data?.eventId,
+          sessionId: data?.sessionId,
+          error: error.message,
+        },
+      );
+    },
   },
   async ({ event, step }) => {
     const { eventId, sessionId } = event.data as CheckoutCompletedData;
 
-    const claimed = await step.run("claim-event", () =>
+    // Verify *first*, claim afterwards. Claiming before verification committed
+    // the event id even when verification failed, so every later delivery of the
+    // same event short-circuited on the claim and a subscription that failed to
+    // reconcile could never be repaired.
+    const result = await step.run("verify-session", () =>
+      verifyCheckoutSession(sessionId),
+    );
+
+    await step.run("claim-event", () =>
       claimStripeEvent(eventId, "checkout.session.completed"),
     );
 
-    if (!claimed) {
-      return { skipped: true, reason: "Event already processed." };
-    }
-
-    return step.run("verify-session", () => verifyCheckoutSession(sessionId));
+    return result;
   },
 );
 
@@ -97,21 +118,18 @@ export const processDocument = inngest.createFunction(
     );
 
     if (!("failed" in result)) {
-      await step.run("enqueue-embeddings", async () => {
-        try {
-          await inngest.send({
-            // Fresh id: Inngest dedupes sends for 24h, and retries (or a
-            // manual retry later) must be able to re-enqueue.
-            id: `document-embed-${documentId}-${Date.now()}`,
-            name: "document/embed.requested",
-            data: { documentId },
-          });
-        } catch (error) {
-          // The text is safely stored; the row stays `extracted` and the UI
-          // offers Retry. Never fail a document whose extraction succeeded.
-          console.error("[documents] could not enqueue embeddings", error);
-        }
-      });
+      // No try/catch: a queue failure must fail the step so Inngest retries it.
+      // Swallowing the error marked the step successful, stranding the document
+      // at `extracted` with no automatic recovery.
+      await step.run("enqueue-embeddings", () =>
+        inngest.send({
+          // Fresh id: Inngest dedupes sends for 24h, and retries (or a
+          // manual retry later) must be able to re-enqueue.
+          id: `document-embed-${documentId}-${Date.now()}`,
+          name: "document/embed.requested",
+          data: { documentId },
+        }),
+      );
     }
 
     return result;

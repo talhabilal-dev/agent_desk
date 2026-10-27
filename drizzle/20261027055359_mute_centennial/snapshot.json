@@ -1,0 +1,47 @@
+{
+  "type": "diff",
+  "version": "9",
+  "dialect": "postgres",
+  "id": "9edda8e8-2f07-4e0d-aad1-60b9aa0dd4cf",
+  "prevIds": [
+    "29a9182c-53a9-4ecd-aa26-94a754ef664c"
+  ],
+  "footprints": [
+    {
+      "statementType": "add_column",
+      "statementTarget": [
+        "column",
+        "public",
+        "plan",
+        "monthly_cost_ceiling_usd"
+      ],
+      "writes": [
+        "s|col|public.plan.monthly_cost_ceiling_usd",
+        "n|col|public.plan.monthly_cost_ceiling_usd",
+        "e|col|public.plan.monthly_cost_ceiling_usd"
+      ],
+      "reads": [
+        "n|tbl|public.plan",
+        "n|sch|public"
+      ]
+    }
+  ],
+  "deltas": [
+    {
+      "op": "create",
+      "row": {
+        "schema": "public",
+        "table": "plan",
+        "name": "monthly_cost_ceiling_usd",
+        "type": "numeric(10,2)",
+        "typeSchema": null,
+        "notNull": true,
+        "dimensions": 0,
+        "default": "'5'",
+        "generated": null,
+        "identity": null,
+        "entityType": "columns"
+      }
+    }
+  ]
+}

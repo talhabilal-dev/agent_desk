@@ -48,8 +48,8 @@ async function WidgetsContent() {
         </p>
       </div>
 
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Card className="border border-white/5 bg-white/[0.02] ring-0 lg:col-span-2">
+      <div className="flex flex-col gap-4">
+        <Card className="border border-white/5 bg-white/[0.02] ring-0">
           <CardHeader>
             <CardTitle>Your widgets</CardTitle>
             <CardDescription>
@@ -72,6 +72,8 @@ async function WidgetsContent() {
                 backgroundColor: widget.backgroundColor,
                 textColor: widget.textColor,
                 position: widget.position,
+                panelWidth: widget.panelWidth,
+                panelHeight: widget.panelHeight,
                 title: widget.title,
                 welcomeMessage: widget.welcomeMessage,
               }))}
@@ -79,24 +81,22 @@ async function WidgetsContent() {
           </CardContent>
         </Card>
 
-        <div className="flex flex-col gap-4">
-          <Card className="border border-white/5 bg-white/[0.02] ring-0">
-            <CardHeader>
-              <CardTitle>Create widget</CardTitle>
-              <CardDescription>
-                Pick a theme now — you can change it any time.
-              </CardDescription>
-            </CardHeader>
-            <CardContent>
-              <CreateWidgetForm
-                organizations={organizations.map(({ id, name }) => ({
-                  id,
-                  name,
-                }))}
-              />
-            </CardContent>
-          </Card>
-        </div>
+        <Card className="border border-white/5 bg-white/[0.02] ring-0">
+          <CardHeader>
+            <CardTitle>Create widget</CardTitle>
+            <CardDescription>
+              Pick a theme now — you can change it any time.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <CreateWidgetForm
+              organizations={organizations.map(({ id, name }) => ({
+                id,
+                name,
+              }))}
+            />
+          </CardContent>
+        </Card>
       </div>
     </>
   );
@@ -109,8 +109,8 @@ function WidgetsSkeleton() {
         <Skeleton className="h-7 w-40" />
         <Skeleton className="h-4 w-80" />
       </div>
-      <div className="grid gap-4 lg:grid-cols-3">
-        <Skeleton className="h-72 w-full lg:col-span-2" />
+      <div className="flex flex-col gap-4">
+        <Skeleton className="h-72 w-full" />
         <Skeleton className="h-[34rem] w-full" />
       </div>
     </>

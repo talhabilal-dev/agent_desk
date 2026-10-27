@@ -172,9 +172,7 @@ function OrganizationRow({ organization }: { organization: OrganizationItem }) {
 
       {isConfirming ? (
         <div className="flex shrink-0 items-center gap-2">
-          <span className="hidden text-xs text-destructive sm:inline">
-            Delete for good?
-          </span>
+          <span className="text-xs text-destructive">Delete for good?</span>
           <Button
             variant="destructive"
             size="sm"

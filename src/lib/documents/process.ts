@@ -5,11 +5,14 @@ import { type Entitlements, getEntitlements } from "@/lib/billing/entitlements";
 
 import { DocumentError } from "./errors";
 import { ocrImages, validateImage } from "./image";
-import { hasTextLayer, readPdf, renderPages } from "./pdf";
+import {
+  hasTextLayer,
+  MAX_PAGES_PER_DOCUMENT,
+  readPdf,
+  renderPages,
+} from "./pdf";
 import { reservePages } from "./quota";
-import { getFile, removeFile } from "./storage";
-
-const MAX_OCR_PAGES = 20;
+import { getFile, removeFile, StorageObjectMissingError } from "./storage";
 
 export type ClaimedDocument = typeof document.$inferSelect;
 
@@ -29,28 +32,15 @@ export async function claimDocument(documentId: string) {
   return row ?? null;
 }
 
-/** Marks the document failed and drops the temp file (no retries remain). */
+/** Marks the document failed. The uploaded object is kept so Retry can use it. */
 export async function failDocument(documentId: string, message: string) {
-  // Read the key before clearing it: RETURNING yields the *new* row, so the
-  // delete below would have nothing to work with.
-  const [existing] = await db
-    .select({ sourceKey: document.sourceKey })
-    .from(document)
-    .where(eq(document.id, documentId))
-    .limit(1);
-
   await db
     .update(document)
     .set({
       status: "failed",
       errorText: message.slice(0, 500),
-      sourceKey: null,
     })
     .where(eq(document.id, documentId));
-
-  if (existing?.sourceKey) {
-    await removeFile(existing.sourceKey);
-  }
 }
 
 async function getOwnerId(organizationId: string) {
@@ -86,13 +76,18 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
 
   try {
     fileBuffer = await getFile(doc.sourceKey);
-  } catch {
-    // A raw ENOENT would be treated as transient and retried; the file is
-    // genuinely gone (ephemeral storage), so fail fast with a clear message.
-    throw new DocumentError(
-      "FILE_MISSING",
-      "The uploaded file is no longer available. Upload it again.",
-    );
+  } catch (error) {
+    // Only a genuinely missing object is permanent. Throttling and transient
+    // storage errors must stay retryable, or a `503 SlowDown` from the bucket
+    // would fail a perfectly good document.
+    if (error instanceof StorageObjectMissingError) {
+      throw new DocumentError(
+        "FILE_MISSING",
+        "The uploaded file is no longer available. Upload it again.",
+      );
+    }
+
+    throw error;
   }
 
   // pdf.js rejects Node Buffers outright ("Please provide binary data as
@@ -111,13 +106,19 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
   }
 
   if (doc.mimeType === "application/pdf") {
-    const { totalPages, text } = await readPdf(bytes);
+    // Only the first pages are processed; long documents are truncated rather
+    // than rejected, and `totalPageCount` records what was skipped.
+    const { totalPages, processedPages, text } = await readPdf(
+      bytes,
+      MAX_PAGES_PER_DOCUMENT,
+    );
 
-    if (hasTextLayer(text, totalPages)) {
+    if (hasTextLayer(text, processedPages)) {
       return {
         ownerId,
         text,
-        pageCount: totalPages,
+        pageCount: processedPages,
+        totalPageCount: totalPages,
         type: "structured_text" as const,
         entitlements,
       };
@@ -125,17 +126,17 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
 
     requireOcr();
 
-    if (totalPages > MAX_OCR_PAGES) {
-      throw new DocumentError(
-        "PROCESSING_FAILED",
-        `Scanned PDFs are limited to ${MAX_OCR_PAGES} pages (this one has ${totalPages}).`,
-      );
-    }
-
     let images: Buffer[];
 
     try {
-      images = await renderPages(bytes, totalPages, MAX_OCR_PAGES);
+      // A fresh copy: pdf.js detaches the buffer it is given, and `bytes` was
+      // already consumed by readPdf above. Reusing it is what made scanned
+      // PDFs fail with "Cannot transfer object of unsupported type".
+      images = await renderPages(
+        new Uint8Array(fileBuffer),
+        totalPages,
+        MAX_PAGES_PER_DOCUMENT,
+      );
     } catch (error) {
       // pdf.js renders through a fake worker that transfers buffers, which Node
       // rejects in some runtimes. Surface it as an actionable message instead of
@@ -156,6 +157,7 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
       ownerId,
       text: pages.join("\n\n"),
       pageCount: images.length,
+      totalPageCount: totalPages,
       type: "raw_text" as const,
       entitlements,
     };
@@ -171,6 +173,7 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
       ownerId,
       text: text ?? "",
       pageCount: 1,
+      totalPageCount: 1,
       type: "raw_text" as const,
       entitlements,
     };
@@ -185,7 +188,10 @@ async function extract(doc: ClaimedDocument): Promise<Extracted> {
 type Extracted = {
   ownerId: string;
   text: string;
+  /** Pages actually processed (capped at `MAX_PAGES_PER_DOCUMENT`). */
   pageCount: number;
+  /** Pages the document really has. */
+  totalPageCount: number;
   type: "raw_text" | "structured_text";
   entitlements: Entitlements;
 };
@@ -230,30 +236,33 @@ export async function processClaimedDocument(documentId: string) {
       );
     }
 
-    // Reserve once per document: a retried run sees `pageCount` already set,
-    // so pages are never double-charged.
-    if (doc.pageCount === null) {
-      await reservePages(
-        extracted.ownerId,
-        extracted.pageCount,
-        extracted.entitlements.pages,
-      );
-    }
+    // Reserve and persist in one transaction. These used to be separate
+    // statements, so a failure after the reservation left `pageCount` null and
+    // the next retry passed the guard below and charged the pages a second time.
+    await db.transaction(async (tx) => {
+      if (doc.pageCount === null) {
+        await reservePages(
+          tx,
+          extracted.ownerId,
+          extracted.pageCount,
+          extracted.entitlements.pages,
+        );
+      }
 
-    // Persist the text and drop the source file before handing off: the
-    // embedding stage reads from the database, never from the upload.
-    await db
-      .update(document)
-      .set({
-        content: text,
-        type: extracted.type,
-        pageCount: extracted.pageCount,
-        processedAt: new Date(),
-        status: "extracted",
-        errorText: null,
-        sourceKey: null,
-      })
-      .where(eq(document.id, doc.id));
+      await tx
+        .update(document)
+        .set({
+          content: text,
+          type: extracted.type,
+          pageCount: extracted.pageCount,
+          totalPageCount: extracted.totalPageCount,
+          processedAt: new Date(),
+          status: "extracted",
+          errorText: null,
+          sourceKey: null,
+        })
+        .where(eq(document.id, doc.id));
+    });
 
     if (doc.sourceKey) {
       await removeFile(doc.sourceKey);

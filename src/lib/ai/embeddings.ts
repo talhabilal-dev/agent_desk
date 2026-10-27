@@ -1,6 +1,6 @@
 import { OpenAIEmbeddings } from "@langchain/openai";
 
-import { db, embedding } from "@/db";
+import { type DbClient, db, embedding } from "@/db";
 import { EMBEDDING_DIMENSIONS } from "@/db/app-schema";
 
 /**
@@ -63,29 +63,39 @@ export async function embedTexts(texts: string[]) {
 }
 
 /**
- * Embeds pre-chunked text and stores one vector per chunk, all linked to the
- * document and its organization.
+ * Stores one vector per chunk.
  *
- * Chunking is deliberately the caller's job — the right chunk size depends on
- * the document type and the retrieval strategy, not on the embedding model.
+ * Vectors are computed by the caller so the embedding request happens *outside*
+ * any transaction — only the writes need to be atomic, and holding a
+ * transaction open across a network call to OpenAI would be wasteful.
  */
-export async function embedDocumentChunks(input: {
-  organizationId: string;
-  documentId: string;
-  chunks: string[];
-}) {
-  const vectors = await embedTexts(input.chunks);
-
-  if (vectors.length === 0) {
+export async function storeDocumentChunks(
+  input: {
+    organizationId: string;
+    documentId: string;
+    chunks: string[];
+    vectors: number[][];
+  },
+  client: DbClient = db,
+) {
+  if (input.chunks.length === 0) {
     return [];
   }
 
-  return db
+  if (input.vectors.length !== input.chunks.length) {
+    throw new Error(
+      `Expected ${input.chunks.length} vectors but got ${input.vectors.length}.`,
+    );
+  }
+
+  return client
     .insert(embedding)
     .values(
-      vectors.map((vector) => ({
+      input.vectors.map((vector, index) => ({
         organizationId: input.organizationId,
         documentId: input.documentId,
+        content: input.chunks[index],
+        chunkIndex: index,
         embedding: vector,
       })),
     )

@@ -119,20 +119,29 @@ export function CreateWidgetForm({
         </Select>
       </div>
 
-      <ThemeFields theme={theme} disabled={isPending} onChange={setTheme} />
+      <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_20rem]">
+        <div className="flex flex-col gap-4">
+          <ThemeFields theme={theme} disabled={isPending} onChange={setTheme} />
 
-      <OriginsField
-        value={origins}
-        disabled={isPending}
-        onChange={setOrigins}
-      />
+          <OriginsField
+            value={origins}
+            disabled={isPending}
+            onChange={setOrigins}
+          />
+        </div>
 
-      <WidgetPreview theme={theme} />
+        <div className="flex flex-col gap-3 lg:sticky lg:top-4 lg:self-start">
+          <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+            Preview
+          </span>
+          <WidgetPreview theme={theme} />
 
-      <Button type="submit" disabled={isPending} className="w-full">
-        {isPending ? <Loader2 className="animate-spin" /> : null}
-        {isPending ? "Creating…" : "Create widget"}
-      </Button>
+          <Button type="submit" disabled={isPending} className="w-full">
+            {isPending ? <Loader2 className="animate-spin" /> : null}
+            {isPending ? "Creating…" : "Create widget"}
+          </Button>
+        </div>
+      </div>
     </form>
   );
 }

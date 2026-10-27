@@ -6,6 +6,11 @@ export type DocumentStatus =
   | "ready"
   | "failed";
 
+/** A row in one of these states will not change on its own. */
+export function isTerminal(status: DocumentStatus) {
+  return status === "ready" || status === "failed";
+}
+
 /** A `processing`/`embedding` row older than this is treated as abandoned. */
 export const STALE_AFTER_MS = 5 * 60 * 1000;
 

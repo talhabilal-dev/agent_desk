@@ -35,6 +35,17 @@ export async function POST(request: Request) {
 
     return Response.json(created, { status: 201 });
   } catch (error) {
-    return Response.json({ error: (error as Error).message }, { status: 400 });
+    // Only the service's own not-found message is safe to echo. A driver or
+    // schema error is a 500, not a 400, and must not leak internals.
+    if (error instanceof Error && error.message === "Organization not found.") {
+      return Response.json({ error: error.message }, { status: 400 });
+    }
+
+    console.error("[widgets] failed to create widget", error);
+
+    return Response.json(
+      { error: "Could not create the widget." },
+      { status: 500 },
+    );
   }
 }

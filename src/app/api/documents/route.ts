@@ -3,18 +3,22 @@ import { and, eq } from "drizzle-orm";
 
 import { db, document, organization } from "@/db";
 import { inngest } from "@/inngest/client";
+import { getEntitlements } from "@/lib/billing/entitlements";
 import { failDocument } from "@/lib/documents/process";
+import { getUsedPages } from "@/lib/documents/quota";
 import {
   DOCUMENT_SUMMARY_COLUMNS,
   listDocumentsForOwner,
 } from "@/lib/documents/service";
-import { putFile } from "@/lib/documents/storage";
+import { putFile, removeFile } from "@/lib/documents/storage";
 import { requireApiSession } from "@/lib/organizations/guard";
 import {
   ALLOWED_DOCUMENT_TYPES,
   MAX_UPLOAD_BYTES,
+  MAX_UPLOAD_MB,
 } from "@/lib/validations/document";
 import { organizationIdSchema } from "@/lib/validations/organization";
+import { postgresErrorCode } from "@/utils/error";
 
 export async function GET(request: Request) {
   const auth = await requireApiSession(request);
@@ -54,7 +58,7 @@ export async function POST(request: Request) {
 
   if (file.size > MAX_UPLOAD_BYTES) {
     return Response.json(
-      { error: "File is larger than 20 MB." },
+      { error: `File is larger than ${MAX_UPLOAD_MB} MB.` },
       { status: 413 },
     );
   }
@@ -72,6 +76,26 @@ export async function POST(request: Request) {
 
   if (!owned) {
     return Response.json({ error: "Organization not found." }, { status: 404 });
+  }
+
+  // Reject before reading the file when the allowance is already spent.
+  // Extraction is the expensive part — doing it only to fail on quota wastes a
+  // worker slot and burns OCR/embedding time for nothing.
+  const [entitlements, usedPages] = await Promise.all([
+    getEntitlements(auth.session.user.id),
+    getUsedPages(auth.session.user.id),
+  ]);
+
+  if (entitlements.pages - usedPages <= 0) {
+    return Response.json(
+      {
+        error:
+          "Your monthly page allowance is used up. Upgrade your plan to process more documents.",
+        code: "PLAN_LIMIT_REACHED",
+        limit: entitlements.pages,
+      },
+      { status: 402 },
+    );
   }
 
   const bytes = Buffer.from(await file.arrayBuffer());
@@ -138,21 +162,58 @@ export async function POST(request: Request) {
   const sourceKey = randomUUID();
   await putFile(sourceKey, bytes);
 
-  const [created] = await db
-    .insert(document)
-    .values({
-      organizationId,
-      content: "",
-      type: "raw_text",
-      action: "ingest",
-      status: "pending",
-      sourceKey,
-      fileName: file.name,
-      mimeType: file.type,
-      sizeBytes: file.size,
-      contentHash,
-    })
-    .returning(DOCUMENT_SUMMARY_COLUMNS);
+  /**
+   * Insert, or adopt the row a concurrent identical upload just created.
+   *
+   * The (organization_id, content_hash) unique index is the real guarantee; this
+   * turns the resulting 23505 into an idempotent response instead of a 500, and
+   * cleans up the object this request wrote so it does not leak.
+   */
+  const rows = await (async () => {
+    try {
+      return await db
+        .insert(document)
+        .values({
+          organizationId,
+          content: "",
+          type: "raw_text",
+          action: "ingest",
+          status: "pending",
+          sourceKey,
+          fileName: file.name,
+          mimeType: file.type,
+          sizeBytes: file.size,
+          contentHash,
+        })
+        .returning(DOCUMENT_SUMMARY_COLUMNS);
+    } catch (error) {
+      if (postgresErrorCode(error) !== "23505") {
+        throw error;
+      }
+
+      await removeFile(sourceKey);
+
+      return db
+        .select(DOCUMENT_SUMMARY_COLUMNS)
+        .from(document)
+        .where(
+          and(
+            eq(document.organizationId, organizationId),
+            eq(document.contentHash, contentHash),
+          ),
+        )
+        .limit(1);
+    }
+  })();
+
+  const created = rows[0];
+
+  if (!created) {
+    return Response.json(
+      { error: "Could not store the document." },
+      { status: 500 },
+    );
+  }
 
   try {
     await inngest.send({

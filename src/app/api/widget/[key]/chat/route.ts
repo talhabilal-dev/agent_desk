@@ -1,3 +1,6 @@
+import { clientIp, guardChatRequest } from "@/lib/arcjet";
+import { getEntitlementsForOrganization } from "@/lib/billing/entitlements";
+import { getMonthlyCost } from "@/lib/usage/service";
 import { widgetChatSchema } from "@/lib/validations/widget";
 import { generateReply } from "@/lib/widgets/chat";
 import { corsHeaders, isOriginAllowed } from "@/lib/widgets/origins";
@@ -18,15 +21,6 @@ async function widgetContext(request: Request, context: RouteContext) {
     widget,
     originAllowed: isOriginAllowed(origin, allowed),
   };
-}
-
-/** Behind a proxy the client IP is only in these headers; anything is advisory. */
-function clientIp(request: Request) {
-  return (
-    request.headers.get("x-forwarded-for")?.split(",")[0]?.trim() ||
-    request.headers.get("x-real-ip") ||
-    "unknown"
-  );
 }
 
 export async function OPTIONS(request: Request, context: RouteContext) {
@@ -77,7 +71,24 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  const limit = rateLimit(`${widget.id}:${clientIp(request)}`, {
+  // Limits and LLM guards run before retrieval, so a blocked request never
+  // reaches the embedding or model APIs.
+  const guard = await guardChatRequest(request, {
+    widgetId: widget.id,
+    message: parsed.data.message,
+  });
+
+  if (!guard.allowed) {
+    return Response.json(
+      { error: guard.error },
+      { status: guard.status, headers },
+    );
+  }
+
+  // Always run the in-process limiter as a backstop. Gating it on "Arcjet is
+  // not configured" meant that a misconfigured or degraded Arcjet — which fails
+  // open by design — left this public endpoint with no limit at all.
+  const limit = rateLimit(`${widget.id}:${clientIp(request) || "unknown"}`, {
     limit: 20,
     windowMs: 60_000,
   });
@@ -92,11 +103,49 @@ export async function POST(request: Request, context: RouteContext) {
     );
   }
 
-  const reply = await generateReply({
-    widgetName: widget.name,
-    message: parsed.data.message,
-    history: parsed.data.history,
-  });
+  // Spend ceiling. The widget key ships in the customer's HTML, so a per-IP
+  // limit is fairness, not a boundary — this is what actually caps the bill.
+  const entitlements = await getEntitlementsForOrganization(
+    widget.organizationId,
+  );
 
-  return Response.json({ reply }, { headers });
+  if (
+    (await getMonthlyCost(widget.organizationId)) >=
+    entitlements.monthlyCostCeilingUsd
+  ) {
+    return Response.json(
+      {
+        error:
+          "This assistant has reached its monthly usage limit. Ask the site owner to raise it.",
+      },
+      { status: 429, headers },
+    );
+  }
+
+  try {
+    const answer = await generateReply({
+      organizationId: widget.organizationId,
+      widgetId: widget.id,
+      message: parsed.data.message,
+      history: parsed.data.history,
+    });
+
+    return Response.json(
+      {
+        reply: answer.answer,
+        kind: answer.kind,
+        status: answer.status,
+        citations: answer.citations,
+        topics: answer.topics,
+      },
+      { headers },
+    );
+  } catch (error) {
+    console.error("[widget] answer failed", error);
+
+    return Response.json(
+      { error: "The assistant couldn't answer just now. Please try again." },
+      { status: 502, headers },
+    );
+  }
 }

@@ -3,6 +3,7 @@ import {
   boolean,
   index,
   integer,
+  numeric,
   pgEnum,
   pgTable,
   text,
@@ -73,6 +74,9 @@ export const chatWidget = pgTable(
     welcomeMessage: text("welcome_message")
       .notNull()
       .default("Hi! How can I help?"),
+    /** Panel size in px. Clamped to the viewport by the loader. */
+    panelWidth: integer("panel_width").notNull().default(340),
+    panelHeight: integer("panel_height").notNull().default(460),
     /**
      * Origins allowed to call the public widget endpoints, e.g.
      * `https://app.acme.com`. Empty means "any origin": the key is publishable
@@ -113,6 +117,17 @@ export const plan = pgTable("plan", {
   /** null = unlimited organizations. */
   organizationLimit: integer("organization_limit"),
   pageLimit: integer("page_limit").notNull(),
+  /**
+   * Calendar-month model spend ceiling in USD. The widget key is publishable,
+   * so this is the only thing standing between a scraped key and unlimited
+   * cost; enforced in the public chat route before every model call.
+   */
+  monthlyCostCeilingUsd: numeric("monthly_cost_ceiling_usd", {
+    precision: 10,
+    scale: 2,
+  })
+    .notNull()
+    .default("5"),
   ocrEnabled: boolean("ocr_enabled").notNull().default(false),
   processingTier: processingTierEnum("processing_tier").notNull(),
   sortOrder: integer("sort_order").notNull().default(0),
@@ -144,7 +159,7 @@ export const organization = pgTable(
   {
     id: uuid("id").primaryKey().defaultRandom(),
     name: text("name").notNull(),
-    slug: text("slug").notNull().unique(),
+    slug: text("slug").notNull(),
     ownerId: text("owner_id")
       .notNull()
       .references(() => user.id, { onDelete: "cascade" }),
@@ -154,7 +169,12 @@ export const organization = pgTable(
       .$onUpdate(() => new Date())
       .notNull(),
   },
-  (table) => [index("organization_owner_id_idx").on(table.ownerId)],
+  (table) => [
+    index("organization_owner_id_idx").on(table.ownerId),
+    // Scoped per owner, not globally: slugs are user-facing, and a global unique
+    // constraint turned the 409 into a cross-tenant existence oracle.
+    uniqueIndex("organization_owner_slug_idx").on(table.ownerId, table.slug),
+  ],
 );
 
 export const document = pgTable(
@@ -176,6 +196,8 @@ export const document = pgTable(
     /** sha-256 of the uploaded bytes; used to dedupe re-uploads. */
     contentHash: text("content_hash"),
     pageCount: integer("page_count"),
+    /** Real page count, so a truncated document can say how much was skipped. */
+    totalPageCount: integer("total_page_count"),
     /** Failure reason shown in the UI. */
     errorText: text("error_text"),
     processedAt: timestamp("processed_at"),
@@ -186,7 +208,12 @@ export const document = pgTable(
       .notNull(),
   },
   (table) => [
-    index("document_organization_id_idx").on(table.organizationId),
+    // Serves the list query's filter *and* its sort, so the single-column
+    // organization index it replaces is redundant.
+    index("document_organization_created_idx").on(
+      table.organizationId,
+      table.createdAt,
+    ),
     index("document_status_idx").on(table.status),
     // Idempotency layer 1: identical bytes in the same org reuse one row.
     // Postgres treats NULLs as distinct, so legacy rows without a hash are fine.
@@ -234,6 +261,9 @@ export const embedding = pgTable(
     documentId: uuid("document_id")
       .notNull()
       .references(() => document.id, { onDelete: "cascade" }),
+    /** Chunk text, kept so retrieved passages can be quoted as citations. */
+    content: text("content").notNull(),
+    chunkIndex: integer("chunk_index").notNull(),
     embedding: vector("embedding", {
       dimensions: EMBEDDING_DIMENSIONS,
     }).notNull(),
@@ -241,13 +271,69 @@ export const embedding = pgTable(
   },
   (table) => [
     index("embedding_organization_id_idx").on(table.organizationId),
-    index("embedding_document_id_idx").on(table.documentId),
+    // Unique so a re-embed can never duplicate vectors, independently of the
+    // delete-then-insert the application performs.
+    uniqueIndex("embedding_document_chunk_idx").on(
+      table.documentId,
+      table.chunkIndex,
+    ),
     // Approximate nearest-neighbour index. Cosine distance suits normalised
     // text embeddings; swapping to l2 / inner product means recreating this
     // index with another opclass and changing the query operator.
     index("embedding_vector_hnsw_idx").using(
       "hnsw",
       table.embedding.op(EMBEDDING_OPERATOR_CLASS),
+    ),
+  ],
+);
+
+/**
+ * Rate card. Kept in the database so prices can be corrected without a deploy;
+ * each usage row stores the cost it computed, so historical totals never move
+ * when a rate changes.
+ */
+export const modelPrice = pgTable("model_price", {
+  model: text("model").primaryKey(),
+  inputPerMillion: numeric("input_per_million", {
+    precision: 12,
+    scale: 6,
+  }).notNull(),
+  outputPerMillion: numeric("output_per_million", {
+    precision: 12,
+    scale: 6,
+  }).notNull(),
+  updatedAt: timestamp("updated_at")
+    .defaultNow()
+    .$onUpdate(() => new Date())
+    .notNull(),
+});
+
+/** One row per model call, attributed to the workspace that caused it. */
+export const llmUsage = pgTable(
+  "llm_usage",
+  {
+    id: uuid("id").primaryKey().defaultRandom(),
+    organizationId: uuid("organization_id")
+      .notNull()
+      .references(() => organization.id, { onDelete: "cascade" }),
+    widgetId: uuid("widget_id").references(() => chatWidget.id, {
+      onDelete: "set null",
+    }),
+    model: text("model").notNull(),
+    inputTokens: integer("input_tokens").notNull().default(0),
+    outputTokens: integer("output_tokens").notNull().default(0),
+    totalTokens: integer("total_tokens").notNull().default(0),
+    costUsd: numeric("cost_usd", { precision: 14, scale: 8 })
+      .notNull()
+      .default("0"),
+    createdAt: timestamp("created_at").defaultNow().notNull(),
+  },
+  (table) => [
+    // The usage card aggregates one organization over a date range, so one
+    // composite index serves both predicates.
+    index("llm_usage_organization_created_idx").on(
+      table.organizationId,
+      table.createdAt,
     ),
   ],
 );

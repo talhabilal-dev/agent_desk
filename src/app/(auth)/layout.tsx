@@ -29,10 +29,6 @@ export default function AuthLayout({
         </Link>
 
         {children}
-
-        <p className="mt-6 text-center text-xs text-muted-foreground">
-          Secured by Better Auth
-        </p>
       </div>
     </div>
   );

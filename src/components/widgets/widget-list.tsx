@@ -83,6 +83,8 @@ function WidgetRow({ widget }: { widget: WidgetItem }) {
     backgroundColor: widget.backgroundColor,
     textColor: widget.textColor,
     position: widget.position,
+    panelWidth: widget.panelWidth,
+    panelHeight: widget.panelHeight,
     title: widget.title,
     welcomeMessage: widget.welcomeMessage,
   });
@@ -140,8 +142,15 @@ function WidgetRow({ widget }: { widget: WidgetItem }) {
   if (isEditing) {
     return (
       <li className="flex flex-col gap-4 py-4 first:pt-0 last:pb-0">
-        <div className="flex items-center justify-between gap-3">
-          <span className="text-sm font-medium">Theme · {widget.name}</span>
+        <div className="flex items-start justify-between gap-3">
+          <div className="flex flex-col gap-0.5">
+            <span className="text-sm font-medium">
+              Editing &ldquo;{widget.name}&rdquo;
+            </span>
+            <span className="text-xs text-muted-foreground">
+              Changes apply everywhere this widget is embedded.
+            </span>
+          </div>
           <Button
             type="button"
             variant="ghost"
@@ -154,50 +163,60 @@ function WidgetRow({ widget }: { widget: WidgetItem }) {
           </Button>
         </div>
 
-        <ThemeFields
-          theme={theme}
-          disabled={pendingAction === "save"}
-          onChange={setTheme}
-        />
+        {/* Form on the left, live preview pinned beside it on the right. */}
+        <div className="grid gap-6 lg:grid-cols-[minmax(0,1fr)_18rem]">
+          <div className="flex flex-col gap-6">
+            <ThemeFields
+              theme={theme}
+              disabled={pendingAction === "save"}
+              onChange={setTheme}
+            />
 
-        <OriginsField
-          value={originsText}
-          disabled={pendingAction === "save"}
-          onChange={setOriginsText}
-        />
+            <OriginsField
+              value={originsText}
+              disabled={pendingAction === "save"}
+              onChange={setOriginsText}
+            />
+          </div>
 
-        <WidgetPreview theme={theme} />
+          <div className="flex flex-col gap-3 lg:sticky lg:top-4 lg:self-start">
+            <span className="text-xs font-semibold tracking-wide text-muted-foreground uppercase">
+              Preview
+            </span>
+            <WidgetPreview theme={theme} />
 
-        <div className="flex items-center gap-2">
-          <Button
-            type="button"
-            disabled={pendingAction === "save"}
-            onClick={() =>
-              run("save", async () => {
-                await updateWidget(widget.id, {
-                  ...theme,
-                  allowedOrigins: parseOriginLines(originsText),
-                });
-                toast.add({ type: "success", title: "Theme updated." });
-                setIsEditing(false);
-              })
-            }
-          >
-            {pendingAction === "save" ? (
-              <Loader2 className="animate-spin" />
-            ) : (
-              <Check />
-            )}
-            Save theme
-          </Button>
-          <Button
-            type="button"
-            variant="ghost"
-            disabled={pendingAction === "save"}
-            onClick={() => setIsEditing(false)}
-          >
-            Cancel
-          </Button>
+            <Button
+              type="button"
+              className="w-full"
+              disabled={pendingAction === "save"}
+              onClick={() =>
+                run("save", async () => {
+                  await updateWidget(widget.id, {
+                    ...theme,
+                    allowedOrigins: parseOriginLines(originsText),
+                  });
+                  toast.add({ type: "success", title: "Widget updated." });
+                  setIsEditing(false);
+                })
+              }
+            >
+              {pendingAction === "save" ? (
+                <Loader2 className="animate-spin" />
+              ) : (
+                <Check />
+              )}
+              Save changes
+            </Button>
+            <Button
+              type="button"
+              variant="ghost"
+              className="w-full"
+              disabled={pendingAction === "save"}
+              onClick={() => setIsEditing(false)}
+            >
+              Cancel
+            </Button>
+          </div>
         </div>
       </li>
     );
@@ -213,7 +232,7 @@ function WidgetRow({ widget }: { widget: WidgetItem }) {
           </span>
         </div>
 
-        <div className="hidden shrink-0 items-center gap-1 sm:flex">
+        <div className="flex shrink-0 items-center gap-1">
           {[widget.primaryColor, widget.backgroundColor, widget.textColor].map(
             swatch,
           )}
@@ -224,7 +243,7 @@ function WidgetRow({ widget }: { widget: WidgetItem }) {
             <Button
               variant="ghost"
               size="icon-sm"
-              aria-label={`Preview ${widget.name}`}
+              aria-label={`Edit ${widget.name}`}
               onClick={() => setIsEditing(true)}
             >
               <Pencil />
@@ -248,7 +267,7 @@ function WidgetRow({ widget }: { widget: WidgetItem }) {
           </div>
         ) : (
           <div className="flex shrink-0 items-center gap-2">
-            <span className="hidden text-xs text-destructive sm:inline">
+            <span className="text-xs text-destructive">
               {confirming === "rotate"
                 ? "Old key stops working?"
                 : "Delete for good?"}

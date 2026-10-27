@@ -3,13 +3,14 @@
 import { ChevronRight, FileText, Loader2 } from "lucide-react";
 import Link from "next/link";
 import { useRouter } from "next/navigation";
-import { useTransition } from "react";
+import { useEffect, useState, useTransition } from "react";
 
+import { RefreshWhileProcessing } from "@/components/refresh-while-processing";
 import { Button } from "@/components/ui/button";
 import { toast } from "@/components/ui/toast";
 import { retryDocument } from "@/lib/documents/client";
 import type { DocumentStatus } from "@/lib/documents/service";
-import { isStalled } from "@/utils/documents";
+import { isStalled, isTerminal } from "@/utils/documents";
 import { errorMessage } from "@/utils/error";
 import { formatBytes } from "@/utils/format";
 
@@ -42,12 +43,19 @@ export function DocumentsList({ documents }: { documents: DocumentRow[] }) {
     );
   }
 
+  const active = documents.some((document) => !isTerminal(document.status));
+
   return (
-    <ul className="flex flex-col divide-y divide-white/5">
-      {documents.map((document) => (
-        <DocumentItem key={document.id} document={document} />
-      ))}
-    </ul>
+    <>
+      {/* Refreshes while anything is still being processed, so a finished
+          document never keeps showing "processing" until a manual reload. */}
+      <RefreshWhileProcessing active={active} />
+      <ul className="flex flex-col divide-y divide-white/5">
+        {documents.map((document) => (
+          <DocumentItem key={document.id} document={document} />
+        ))}
+      </ul>
+    </>
   );
 }
 
@@ -55,9 +63,17 @@ function DocumentItem({ document }: { document: DocumentRow }) {
   const router = useRouter();
   const [isRetrying, startRetry] = useTransition();
 
-  const stalled = isStalled(document.status, document.updatedAt);
-  const canRetry =
-    document.status === "failed" || document.status === "extracted" || stalled;
+  // Computed after mount: calling Date.now() during render made the server and
+  // client passes disagree near the staleness boundary, and never re-evaluated.
+  const [canRetry, setCanRetry] = useState(false);
+
+  useEffect(() => {
+    setCanRetry(
+      document.status === "failed" ||
+        document.status === "extracted" ||
+        isStalled(document.status, document.updatedAt),
+    );
+  }, [document.status, document.updatedAt]);
 
   function retry() {
     startRetry(async () => {
@@ -99,6 +115,9 @@ function DocumentItem({ document }: { document: DocumentRow }) {
             size="sm"
             variant="ghost"
             disabled={isRetrying}
+            // Every row had the same accessible name, so a screen reader listed
+            // N identical "Retry" buttons with no way to tell them apart.
+            aria-label={`Retry ${document.fileName ?? "document"}`}
             onClick={retry}
           >
             {isRetrying ? <Loader2 className="animate-spin" /> : null}

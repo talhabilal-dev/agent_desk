@@ -1,3 +1,4 @@
+import { guardWidgetFetch } from "@/lib/arcjet";
 import { corsHeaders, isOriginAllowed } from "@/lib/widgets/origins";
 import { getWidgetByPublicKey } from "@/lib/widgets/service";
 
@@ -36,6 +37,16 @@ export async function GET(request: Request, context: RouteContext) {
     context,
   );
   const headers = corsHeaders(origin, allowed);
+  const guard = await guardWidgetFetch(request, {
+    widgetId: widget?.id ?? "unknown",
+  });
+
+  if (!guard.allowed) {
+    return Response.json(
+      { error: guard.error },
+      { status: guard.status, headers },
+    );
+  }
 
   if (!widget) {
     return Response.json(
@@ -69,6 +80,7 @@ export async function GET(request: Request, context: RouteContext) {
         textColor: widget.textColor,
         position: widget.position,
       },
+      size: { width: widget.panelWidth, height: widget.panelHeight },
     },
     { headers: { ...headers, "Cache-Control": "public, max-age=60" } },
   );

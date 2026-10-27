@@ -2,6 +2,9 @@ import { extractTextItems, renderPageAsImage } from "unpdf";
 
 /** Visible characters per page required before a PDF counts as having a text layer. */
 const MIN_CHARS_PER_PAGE = 10;
+/** Hard cap on pages processed per document, per job. */
+export const MAX_PAGES_PER_DOCUMENT = 10;
+
 /** PDF text items within this many units of Y are treated as the same line. */
 const Y_TOLERANCE = 3;
 
@@ -67,11 +70,20 @@ export function alignPages(pages: PdfTextItem[][]) {
     .join("\n\n");
 }
 
-/** Extracts text for every page, rebuilding layout from item coordinates. */
-export async function readPdf(data: Uint8Array) {
+/**
+ * Extracts text for at most `maxPages` pages, rebuilding layout from item
+ * coordinates. `totalPages` is the document's real page count, so callers can
+ * tell the user when a document was truncated rather than silently indexing
+ * only part of it.
+ */
+export async function readPdf(
+  data: Uint8Array,
+  maxPages: number = MAX_PAGES_PER_DOCUMENT,
+) {
   const { totalPages, items } = await extractTextItems(data);
+  const pages = items.slice(0, Math.max(1, maxPages));
 
-  return { totalPages, text: alignPages(items) };
+  return { totalPages, processedPages: pages.length, text: alignPages(pages) };
 }
 
 /**

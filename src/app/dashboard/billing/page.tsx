@@ -11,6 +11,7 @@ import {
   CardTitle,
 } from "@/components/ui/card";
 import { Skeleton } from "@/components/ui/skeleton";
+import { UsageByOrganization } from "@/components/usage-by-organization";
 import {
   getCurrentSubscription,
   getEntitlements,
@@ -20,6 +21,7 @@ import { listPlans } from "@/lib/billing/plans";
 import { getUsedPages } from "@/lib/documents/quota";
 import { listOrganizations } from "@/lib/organizations/service";
 import { getSession } from "@/lib/session";
+import { getOrganizationUsage } from "@/lib/usage/service";
 
 export const metadata = {
   title: "Billing",
@@ -40,13 +42,14 @@ async function BillingContent() {
     redirect("/sign-in");
   }
 
-  const [plans, current, entitlements, organizations, pagesUsed] =
+  const [plans, current, entitlements, organizations, pagesUsed, usage] =
     await Promise.all([
       listPlans(),
       getCurrentSubscription(session.user.id),
       getEntitlements(session.user.id),
       listOrganizations(session.user.id),
       getUsedPages(session.user.id),
+      getOrganizationUsage(session.user.id),
     ]);
 
   const billingConfigured = isBillingConfigured();
@@ -147,6 +150,18 @@ async function BillingContent() {
           </CardContent>
         </Card>
       </div>
+
+      <Card className="border border-white/5 bg-white/[0.02] ring-0">
+        <CardHeader>
+          <CardTitle>Usage by organization</CardTitle>
+          <CardDescription>
+            Model tokens and cost attributed to each workspace.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <UsageByOrganization usage={usage} />
+        </CardContent>
+      </Card>
 
       <div className="flex flex-col gap-1">
         <h2 className="text-lg font-semibold tracking-tight">Plans</h2>

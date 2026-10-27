@@ -46,6 +46,16 @@ export function PlanCards({
     }
   }
 
+  if (plans.length === 0) {
+    return (
+      <p className="text-sm text-muted-foreground">
+        No plans are available yet. Run{" "}
+        <code className="font-mono text-xs">scripts/seed-plans.sql</code> to
+        populate the catalog.
+      </p>
+    );
+  }
+
   return (
     <div className="flex flex-col gap-4">
       <div className="flex items-center gap-1 self-start rounded-lg border border-white/10 bg-white/[0.03] p-1">

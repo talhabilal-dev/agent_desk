@@ -30,8 +30,12 @@ function billingPlugins(): BetterAuthPlugin[] {
       /**
        * Enqueue authoritative verification. Signature verification already
        * happened before this hook runs, and the plugin has already written the
-       * subscription row, so a queueing failure must never fail the webhook
-       * (Stripe would retry the whole event).
+       * subscription row.
+       *
+       * The send is deliberately NOT wrapped in a try/catch: if queueing fails,
+       * verification never runs, so failing the webhook (Stripe retries) is far
+       * better than acknowledging an event we dropped. Swallowing it meant a paid
+       * customer could stay unreconciled with no retry and no signal.
        */
       onEvent: async (event) => {
         if (event.type !== "checkout.session.completed") {
@@ -40,19 +44,12 @@ function billingPlugins(): BetterAuthPlugin[] {
 
         const session = event.data.object as Stripe.Checkout.Session;
 
-        try {
-          await inngest.send({
-            // Inngest dedupes on this id for 24h.
-            id: `stripe-${event.id}`,
-            name: "stripe/checkout.completed",
-            data: { eventId: event.id, sessionId: session.id },
-          });
-        } catch (error) {
-          console.error(
-            "[billing] could not enqueue checkout verification",
-            error,
-          );
-        }
+        await inngest.send({
+          // Inngest dedupes on this id for 24h.
+          id: `stripe-${event.id}`,
+          name: "stripe/checkout.completed",
+          data: { eventId: event.id, sessionId: session.id },
+        });
       },
       subscription: {
         enabled: true,
@@ -87,6 +84,16 @@ export const auth = betterAuth({
   database: drizzleAdapter(db, { provider: "pg", schema }),
   emailAndPassword: {
     enabled: true,
+  },
+  /**
+   * Explicit, because better-auth's default is "enabled in production only" and
+   * its counter is per instance. The stricter built-in rules for the sign-in and
+   * sign-up endpoints still apply; this raises the global floor.
+   */
+  rateLimit: {
+    enabled: true,
+    window: 60,
+    max: 100,
   },
   session: {
     expiresIn: 60 * 60 * 24 * 7,
