@@ -34,8 +34,8 @@ const envSchema = z.object({
   // Object storage. Required in production; `storage.ts` enforces that at call
   // time so a build without configuration still succeeds.
   S3_BUCKET: z.string().min(1).optional(),
-  S3_ENDPOINT: z.string().url().optional(),
-  S3_REGION: z.string().min(1).optional(),
+  AWS_ENDPOINT_URL_S3: z.url().optional(),
+  AWS_REGION: z.string().min(1).optional(),
   AWS_ACCESS_KEY_ID: z.string().min(1).optional(),
   AWS_SECRET_ACCESS_KEY: z.string().min(1).optional(),
 
@@ -43,7 +43,6 @@ const envSchema = z.object({
   INNGEST_SIGNING_KEY: z.string().min(1).optional(),
 
   DIRECT_DATABASE_URL: z.string().min(1).optional(),
-  UPLOAD_DIR: z.string().min(1).optional(),
 });
 
 export type Env = z.infer<typeof envSchema>;

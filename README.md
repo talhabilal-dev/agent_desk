@@ -237,6 +237,11 @@ Neon is the target (pgvector and HNSW included). You need **two** connection str
 | `DATABASE_URL` | pooled endpoint — application traffic |
 | `DIRECT_DATABASE_URL` | direct endpoint — migrations only (DDL through a pooler is a known failure mode) |
 
+Append `?sslmode=verify-full` to both. pg warns that `require` is currently treated
+as an alias for `verify-full` but will adopt weaker libpq semantics in pg v9 — naming it
+explicitly keeps certificate verification on. (Neon's proxy terminates TLS, so
+`pg_stat_ssl` reports `ssl = false` on the backend; the client leg is still TLS 1.3.)
+
 ### 3. Migrate
 
 ```bash
@@ -366,6 +371,56 @@ Deliberate, documented, and not silently ignored:
   TODO rather than a Sentry integration.
 
 ---
+
+## Deploy
+
+Built for serverless (Vercel/Netlify), with Neon providing both Postgres and object
+storage — one vendor, one credential system, and preview branches fork data *and* files.
+
+### Before the first deploy
+
+1. **Migrate.** `pnpm db:migrate` against `DIRECT_DATABASE_URL`. It is the only path that
+   emits `CREATE EXTENSION vector`, so a fresh database cannot be built any other way.
+   Then seed the catalogs: `psql "$DIRECT_DATABASE_URL" -f scripts/seed-plans.sql` and
+   `scripts/seed-model-prices.sql`.
+2. **Create the bucket** in Neon and set `S3_BUCKET`. `neon deploy` injects
+   `AWS_ENDPOINT_URL_S3`, `AWS_REGION` and the credentials, and `storage.ts` accepts those
+   names — the bucket name is the one thing it cannot infer. No bucket means uploads throw
+   in production (the boot log says so explicitly).
+3. **Set the environment in the platform**, not in `.env` (see the table below).
+4. **Stripe webhook** → `https://<domain>/api/auth/stripe/webhook`. The signing secret for
+   *that* endpoint is `STRIPE_WEBHOOK_SECRET`.
+5. **Inngest** → register `https://<domain>/api/inngest`. Without it nothing is ever
+   processed and uploads return 503.
+6. **Colocate the function region** with the Neon project. Object storage exists only in
+   `aws-us-east-1`, `aws-us-east-2`, `aws-eu-central-1` and `aws-ap-southeast-1`; anything
+   else pays cross-region latency on every upload and read.
+
+| Variable | Production value |
+| --- | --- |
+| `DATABASE_URL` | pooled Neon host, `?sslmode=verify-full` |
+| `DIRECT_DATABASE_URL` | direct Neon host, `?sslmode=verify-full` |
+| `BETTER_AUTH_URL` | your domain — cookies, redirects and trusted origins derive from it |
+| `ARCJET_ENV` | `production` |
+| `S3_BUCKET` | the bucket from step 2 |
+| `INNGEST_EVENT_KEY` / `INNGEST_SIGNING_KEY` | from Inngest Cloud |
+| `STRIPE_SECRET_KEY` / `STRIPE_WEBHOOK_SECRET` | from Stripe |
+| `OPENAI_API_KEY` | your key |
+
+### Four things that bite
+
+- **`next start` does not read `.env`.** Only `next dev` and `next build` do. A local
+  production run needs the variables exported (or `docker run --env-file .env`); on Vercel
+  and Netlify they come from project settings. Get this wrong and the app starts happily
+  against the wrong database.
+- **Use `sslmode=verify-full`, not `require`.** pg currently treats `require` as an alias
+  for `verify-full` but will adopt weaker libpq semantics in pg v9. `pg_stat_ssl` reporting
+  `ssl = false` is expected — Neon terminates TLS at its proxy, while the client leg is
+  TLS 1.3 and verified.
+- **Migrations are not automatic.** A schema change needs `pnpm db:migrate` in the deploy
+  pipeline; nothing runs it at runtime.
+- **The first request after idle is slow** — Neon scales compute to zero, so expect a
+  cold-start on the first query rather than a fault.
 
 ## Troubleshooting
 

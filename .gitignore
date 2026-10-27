@@ -45,3 +45,16 @@ next-env.d.ts
 
 # tesseract.js language models, downloaded on first OCR run
 *.traineddata
+
+# agent tooling (scratch/generated — not application code)
+# AGENTS.md is written by `next dev`, so it reappears on every run.
+/AGENTS.md
+/.commandcode/
+/.claude/
+/.cursor/
+/.agents/
+/.codex/
+CLAUDE.md
+
+# scratch files from local verification runs
+/.tmp-*

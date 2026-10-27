@@ -31,7 +31,16 @@ const region = process.env.S3_REGION ?? process.env.AWS_REGION ?? "auto";
 /** Development convenience only: a bucket is required in production. */
 const useLocalDisk = !bucket && process.env.NODE_ENV !== "production";
 
-const LOCAL_ROOT = process.env.UPLOAD_DIR ?? ".uploads";
+/**
+ * Dev-only local disk root.
+ *
+ * Deliberately static (cwd + a literal folder): deriving it from an env var made
+ * the path unknowable at build time, so Turbopack traced the entire project into
+ * the server output ("Dynamic filesystem access causes tracing of the whole
+ * project"). Production always uses the bucket, so nothing here needs to be
+ * configurable.
+ */
+const LOCAL_ROOT = join(process.cwd(), ".uploads");
 
 const client = bucket
   ? new S3Client({
